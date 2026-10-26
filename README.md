@@ -39,6 +39,20 @@ npm start
 
 The server serves `client/dist` if the production build exists.
 
+## Test
+
+With the app running (`npm run dev`), run the API end-to-end tests from another terminal:
+
+```powershell
+npm test
+```
+
+The tests use throwaway users in the configured database and remove them afterward. Auth endpoints are rate limited to 10 requests per minute, so wait about a minute between runs. See [overview.md](./overview.md#testing).
+
+## Working with AI agents
+
+[AGENTS.md](./AGENTS.md) summarizes commands, conventions, UI rules, and pitfalls for AI coding agents such as Codex or Copilot.
+
 ## Features
 
 - User registration and login with bcrypt password hashes, signed HTTP-only JWT cookies, and rate-limited authentication endpoints.
@@ -50,6 +64,8 @@ The server serves `client/dist` if the production build exists.
 - Completion, 30-minute snoozes, missed occurrences, paginated history, archive, and restore.
 - In-app reminders appear in the Notifications view and as a toast while signed in (checked every 15 seconds); email through SMTP and browser push through Web Push/VAPID require server configuration.
 - MongoDB-backed notification delivery outbox with retries for email and browser push.
+- Permanent deletion of archived tasks, history entries, and notifications.
+- Responsive layout with a light/dark theme switch at the bottom of every page (saved in the browser).
 
 ## Environment variables
 

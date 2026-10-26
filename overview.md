@@ -105,13 +105,19 @@ The root package uses npm workspaces to coordinate the client and server:
 │   │   ├── scheduler.js
 │   │   ├── tasks.js
 │   │   └── validation.js
+│   ├── test/
+│   │   └── api.test.js
 │   └── package.json
 ├── .env.example
+├── .gitignore
+├── AGENTS.md
 ├── package.json
 ├── package-lock.json
 ├── README.md
 └── overview.md
 ```
+
+`AGENTS.md` is the quick-start for AI coding agents (commands, conventions, pitfalls). `overview.md` is the full reference.
 
 ### Client
 
@@ -119,7 +125,17 @@ The root package uses npm workspaces to coordinate the client and server:
 - `client/src/api.js` is the same-origin JSON API helper and converts a VAPID base64url key to the browser Push API's byte format.
 - `client/src/main.jsx` mounts React.
 - `client/src/styles.css` contains the responsive application styling and light/dark color palettes.
-- A theme toggle appears at the bottom of each signed-in page. The selection is saved in browser local storage and restored on later visits.
+- A theme toggle appears at the bottom of each signed-in page. The selection is saved in browser local storage (`theme`) and applied as `data-theme` on `<html>`.
+  - The control is an accessible checkbox with `role="switch"` and the label "Dark mode", inside `<footer class="theme-footer">`.
+  - The footer is in normal document flow on every viewport (it sits after the page content). It must not be `position: fixed` or sticky: that previously covered content or hid the switch on mobile.
+
+#### Design system (`styles.css`)
+
+- Colors are CSS custom properties on `:root`, with dark overrides under `:root[data-theme='dark']`. Base tokens: `--green`, `--ink`, `--muted`, `--line`, `--paper`, `--canvas`, `--surface`.
+- Accent tokens: `--accent-teal`, `--accent-blue`, `--accent-violet`, `--accent-amber`, `--accent-coral` plus `*-soft` backgrounds. Task cards cycle teal/blue/violet/amber through `--task-accent`; missed tasks use coral. History and Notifications nav tabs use blue and violet.
+- Prefer these tokens (with `color-mix`) over hard-coded hex values so both themes stay consistent.
+- Dark mode uses a near-black canvas and gray (not white) text, while keeping colored accents.
+- The mobile layout is a single column at `max-width: 740px` with a compact header (brand and sign-out on one row, nav on the next). Avoid shrinking it into a narrow "box".
 - `client/public/sw.js` handles push events and notification clicks.
 - `client/index.html` is the Vite HTML entry point.
 
@@ -319,8 +335,28 @@ Run from the repository root:
 | `npm run dev` | Starts the API in Node watch mode and the Vite development server |
 | `npm run build` | Builds the React client into `client/dist` |
 | `npm start` | Starts the API, MongoDB client, and reminder scheduler |
+| `npm test` | Runs the API end-to-end tests (`server/test/api.test.js`); the API must already be running |
+
+## Testing
+
+`server/test/api.test.js` uses Node's built-in test runner (`node:test`) with no extra dependencies. It calls the running API over HTTP (`API_URL`, default `http://localhost:3001`) and talks to MongoDB directly to age occurrences and clean up.
+
+- Start the app first (`npm run dev`), then run `npm test`.
+- It covers auth and validation, all four recurrence types, edit, repeated snooze, complete, history/notification deletion, archive/restore/permanent delete, missed-occurrence notifications via `runSchedulerTick()`, preferences, and cross-user isolation.
+- It uses throwaway users (`test-…@example.com`) against the configured database and deletes everything it created. The database is the real Atlas database, so never point it at data you care about.
+- Auth endpoints are limited to 10 requests per minute; wait about a minute between runs.
+- Editing server files while `npm run dev` runs restarts the API (`node --watch`); wait for "API listening" before running tests.
+- There are no automated client tests. Verify UI changes in a browser at mobile (about 390 px) and desktop widths, in both themes.
 
 On Windows, if PowerShell blocks the `npm.ps1` shim, run commands as `npm.cmd run dev`, `npm.cmd run build`, and similar.
+
+## Known gotchas
+
+- Node 24 treats `node --test test/` as a module path; the test script names the file explicitly.
+- `.env` holds real credentials and is git-ignored. Never print, commit, or copy it.
+- Date/time bugs are the most likely regressions. Test editing a task after it was snoozed or missed (snooze must clear, stale occurrences must be superseded).
+- Users should never see raw server errors. The client shows short friendly messages (`pageError` banner); see `errors.js` for the server side.
+- The workspace was not under Git until late in development. If an editor shows "changes … were … Keep/Undo" errors, the editor's change tracking is stale; the file on disk is authoritative.
 
 ## Product scope
 
