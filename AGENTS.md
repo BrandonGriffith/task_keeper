@@ -35,7 +35,7 @@ On Windows PowerShell, use `npm.cmd` if `npm.ps1` is blocked. PowerShell has no 
 
 - Mongo documents use UUID string `_id` and camelCase fields. API responses use snake_case; keep that mapping.
 - Multi-document changes use `withMongoTransaction` (needs an Atlas or replica-set MongoDB).
-- Every query is scoped by `userId`. Never return or modify another user's data.
+- Scope every user-data query and mutation by the authenticated `userId`. System-wide scheduler and lease queries are not user data.
 - Input validation uses zod in `server/src/validation.js`.
 - Users must never see raw server or stack errors. Show short friendly messages.
 - Keep changes surgical. Update `overview.md` and `README.md` when behavior, routes, or setup change.
@@ -49,7 +49,7 @@ On Windows PowerShell, use `npm.cmd` if `npm.ps1` is blocked. PowerShell has no 
 
 ## Verification notes
 
-- There is no automated test suite in this repository. Use `npm run build` for client build validation.
+- This repository has no automated test suite. Run `npm run build` for client build validation; use the browser-control skill for safe, user-visible workflow checks.
 - Editing server files restarts the API (`node --watch`); wait for "API listening" before checking API behavior.
 - Preserve key flows: register/login, create tasks of all four frequencies, edit after snooze or missed (no stale "snoozed until" or "missed occurrence"), repeated 30-minute snoozes, complete, delete history/notifications/archived tasks.
 

@@ -25,7 +25,7 @@ MongoDB driver 7 requires Node.js 20.19 or later. A standalone local `mongod` is
 - Passwords must contain 10–128 characters and are stored as bcrypt hashes.
 - Authentication uses a signed JSON Web Token in an HTTP-only cookie. The cookie is `SameSite=Lax`, valid for seven days, and marked `Secure` in production.
 - Registration and login are limited to 10 requests per minute.
-- Authenticated task and notification access is scoped to the current user ID.
+- Authenticated user-data access is scoped to the current user ID; system-wide scheduler operations use separate coordination records.
 - Each user document stores their in-app, system-push, and email notification preferences.
 
 ### Recurring tasks
@@ -47,17 +47,17 @@ Additional scheduling behavior:
 - February 29 is excluded from yearly schedules.
 - Recurrences are calculated in the schedule's IANA timezone so the local due hour remains stable across daylight-saving transitions.
 - Users can create, edit, complete, snooze, archive, and restore tasks.
-- Editing a task replaces open future occurrences and their notifications but preserves completed history.
+- Editing a task supersedes already-due open occurrences, clears their snoozes, and replaces future occurrences for the old schedule while preserving completed history.
 - Archiving hides a task from the active list without deleting its occurrences or history. Archived tasks can be permanently deleted, along with their occurrences, linked notifications, and pending notification deliveries.
 - Individual history entries and in-app notifications can be deleted from their respective views. Deleting a history entry also deletes notifications and pending deliveries linked to that occurrence.
 
 ### Occurrences, missed work, and history
 
-A task is the recurring schedule; an occurrence is one scheduled instance. Occurrence documents keep a snapshot of the task title and due instant, plus lifecycle state and timestamps.
+A task is the recurring schedule; an occurrence is one scheduled instance. Occurrence documents keep a snapshot of the task title and due instant, plus lifecycle state, snooze state, and reminder timestamps.
 
 - New occurrences start as `pending`.
 - When a due time passes without completion or an active snooze, the scheduler marks the occurrence `missed`, records `missedAt`, and creates a reminder. A pending occurrence already snoozed is skipped until the snooze expires.
-- Open missed occurrences generate another reminder every 10 minutes. Snoozing pauses repeats until the snooze expires; the snooze reminder then restarts the 10-minute interval. Completing the occurrence stops reminders.
+- Open missed occurrences generate another reminder every 10 minutes from the last reminder. Snoozing pauses repeats until the snooze expires; the snooze-expiry reminder restarts the interval. The scheduler checks every 15 seconds, so reminders can arrive just after the 10-minute boundary. Completing the occurrence stops reminders.
 - Pending or missed occurrences can be completed. Completing an occurrence advances the task to its next open occurrence.
 - Each snooze click adds 30 minutes to the later of the existing snooze deadline or the current time. The task card shows the updated deadline, and the scheduler creates a follow-up reminder when it arrives.
 - Editing a task supersedes any already-due open occurrence and clears its snooze, while retaining the missed occurrence in history. Future occurrences for the old schedule are removed and replaced with the edited schedule.
@@ -161,7 +161,7 @@ The server uses the official MongoDB Node.js driver directly. Documents use UUID
 | --- | --- |
 | `users` | Email, password hash, user ID, creation time, and embedded notification preferences |
 | `tasks` | User-owned recurrence definitions, timezone, next due instant, and archive state |
-| `occurrences` | Scheduled task instances, task-title snapshot, status, due time, completion/missed/superseded timestamps, and snooze state |
+| `occurrences` | Scheduled task instances, task-title snapshot, status, due time, completion/missed/superseded timestamps, snooze state, and last-reminder time |
 | `notifications` | In-app notifications and read state; optionally linked to an occurrence |
 | `pushSubscriptions` | Browser subscriptions keyed by endpoint and owner |
 | `notificationDeliveries` | Retryable per-channel email/push outbox records |
@@ -176,7 +176,7 @@ The server uses the official MongoDB Node.js driver directly. Documents use UUID
 - Unique occurrence per task and due instant.
 - Occurrence lookup by task/status/due time; by user/history ordering; by status/due/notification state; and by status/snooze time.
 - Notification lookup by owner and creation time.
-- Unique occurrence/kind notification when an occurrence is linked, preventing duplicate reminders or adjustment notifications.
+- Unique occurrence/kind notification for records linked through `occurrenceId` (schedule-adjustment notifications). Task reminders use `sourceOccurrenceId` and are coordinated by the scheduler lease instead.
 - Unique push endpoint and push subscriptions by owner.
 - Unique notification/channel delivery and delivery queue lookup by status/retry/update times.
 
@@ -231,11 +231,11 @@ The API process runs the reminder scheduler; it does not need a separate worker.
 Each scheduler tick:
 
 1. Creates occurrences for active tasks that lack an open future occurrence, maintaining a future occurrence and a rolling seven-day schedule horizon.
-2. Marks due, unnotified occurrences as missed and creates in-app notifications and configured external-channel delivery records.
-3. Creates reminders for occurrences whose snooze time has expired.
+2. Marks due, unnotified occurrences as missed and creates reminders plus delivery records for enabled external channels.
+3. Creates a reminder when a snooze expires. If the occurrence remains missed and open, it gets another reminder every 10 minutes; snoozing pauses that interval and expiry starts it over.
 4. Claims eligible email/push delivery records, dispatches them, and records success or retry state.
 
-The API process must remain running for scheduler reminders to be processed. When the app is open and signed in, the browser checks for in-app reminders every 15 seconds; with email and push not configured, those channels will not deliver external alerts. The task/occurrence unique index and notification/delivery unique indexes help make creation idempotent when a tick retries. Local deployments need replica-set mode for transactions; MongoDB Atlas clusters provide replica-set transaction support.
+The API process must remain running for scheduler reminders to be processed. When the app is open and signed in, the browser checks for in-app reminders every 15 seconds. Email and push delivery requires the corresponding server configuration and enabled user preference. Unique task/occurrence and notification/delivery indexes protect their respective records; reminder creation is coordinated by the scheduler lease. Local deployments need replica-set mode for transactions; MongoDB Atlas clusters provide replica-set transaction support.
 
 ## Dependencies
 
@@ -334,13 +334,13 @@ Run from the repository root:
 | `npm run build` | Builds the React client into `client/dist` |
 | `npm start` | Starts the API, MongoDB client, and reminder scheduler |
 
-There is no automated test suite in this repository. Verify UI or API changes with the running app as appropriate.
+This repository currently has no automated test suite. Use `npm run build` for client build validation and the browser-control skill for safe, user-visible workflow checks. Verify API behavior with the running app when the change affects server routes or scheduling.
 
 On Windows, if PowerShell blocks the `npm.ps1` shim, run commands as `npm.cmd run dev`, `npm.cmd run build`, and similar.
 
 ## Known gotchas
 
-- `.env` holds real credentials and is git-ignored. Never print, commit, or copy it.
+- `.env` contains private configuration and is git-ignored. Never print, commit, or copy it.
 - Date/time bugs are the most likely regressions. Test editing a task after it was snoozed or missed (snooze must clear, stale occurrences must be superseded).
 - Users should never see raw server errors. The client shows short friendly messages (`pageError` banner); see `errors.js` for the server side.
 - The workspace was not under Git until late in development. If an editor shows "changes … were … Keep/Undo" errors, the editor's change tracking is stale; the file on disk is authoritative.
