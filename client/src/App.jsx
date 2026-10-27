@@ -371,9 +371,29 @@ function TaskCard({ task, onEdit, onComplete, onSnooze, onArchive, onRestore, on
   );
 }
 
-function NotificationSettings({ settings, onChange, onEnableSystem, notice, busy }) {
+function NotificationSettings({
+  settings,
+  browserPermission,
+  onChange,
+  onEnableBrowser,
+  onEnableSystem,
+  notice,
+  busy,
+}) {
   if (!settings) return null;
   const { preferences, availability } = settings;
+  let browserAlertStatus = 'Permission is needed to show task reminders';
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+    browserAlertStatus = 'Not supported by this browser';
+  } else if (!window.isSecureContext) {
+    browserAlertStatus = 'Requires HTTPS or localhost';
+  } else if (browserPermission === 'granted') {
+    browserAlertStatus = browserAlertsReady
+      ? 'Allowed; task reminders appear as browser alerts while this app is open'
+      : 'Permission granted; browser alerts still need setup';
+  } else if (browserPermission === 'denied') {
+    browserAlertStatus = 'Blocked in browser site settings';
+  }
   return (
     <section className="settings-card">
       <div className="section-heading compact-heading">
@@ -381,6 +401,27 @@ function NotificationSettings({ settings, onChange, onEnableSystem, notice, busy
           <p className="eyebrow">Stay in the loop</p>
           <h2>Reminders</h2>
         </div>
+      </div>
+      <div className="preference-row browser-alert-row">
+        <span>
+          <strong>Browser alerts while open</strong>
+          <small>{browserAlertStatus}. Requires In-app reminders to be enabled.</small>
+        </span>
+        {!browserAlertsReady && browserPermission !== 'denied' && (
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={onEnableBrowser}
+            disabled={
+              busy
+              || !('Notification' in window)
+              || !('serviceWorker' in navigator)
+              || !window.isSecureContext
+            }
+          >
+            Enable browser notifications
+          </button>
+        )}
       </div>
       <label className="preference-row">
         <span><strong>In-app</strong><small>Keep a record in Notifications</small></span>
@@ -405,8 +446,8 @@ function NotificationSettings({ settings, onChange, onEnableSystem, notice, busy
       </label>
       <label className="preference-row">
         <span>
-          <strong>System notifications</strong>
-          <small>{availability.system ? 'Browser push is configured' : 'Needs server push configuration'}</small>
+          <strong>Background push</strong>
+          <small>{availability.system ? 'Push delivery is configured' : 'Needs server push configuration'}</small>
         </span>
         <input
           type="checkbox"
@@ -416,11 +457,11 @@ function NotificationSettings({ settings, onChange, onEnableSystem, notice, busy
         />
       </label>
       <button className="secondary-button setup-push" onClick={onEnableSystem} disabled={busy}>
-        Enable this browser
+        Enable background push on this browser
       </button>
       {notice && <p className="settings-notice" role="status">{notice}</p>}
       {!availability.email && <p className="settings-hint">Email reminders stay queued until SMTP is configured.</p>}
-      {!availability.system && <p className="settings-hint">System reminders stay queued until VAPID push keys are configured.</p>}
+      {!availability.system && <p className="settings-hint">Background push reminders stay queued until VAPID push keys are configured.</p>}
     </section>
   );
 }
@@ -445,6 +486,10 @@ export default function App() {
   const [showArchived, setShowArchived] = useState(false);
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [settingsNotice, setSettingsNotice] = useState('');
+  const [browserPermission, setBrowserPermission] = useState(() => (
+    'Notification' in window ? Notification.permission : 'unsupported'
+  ));
+  const [browserAlertsReady, setBrowserAlertsReady] = useState(false);
   const notificationIds = useRef(new Set());
 
   useLayoutEffect(() => {
@@ -498,7 +543,29 @@ export default function App() {
         if (unseen.length) {
           await refreshData();
           if (!active) return;
-          notify(unseen.length === 1 ? `Reminder: ${unseen[0].body}` : `${unseen.length} new reminders`);
+          if (browserAlertsReady) {
+            const reminders = unseen.filter((notification) => notification.kind === 'reminder');
+            if (reminders.length) {
+              try {
+                const registration = await navigator.serviceWorker.getRegistration();
+                if (!registration) throw new Error('No service worker is registered for browser alerts.');
+                await Promise.all(reminders.map((notification) => registration.showNotification(
+                  notification.title,
+                  {
+                    body: notification.body,
+                    icon: '/icon.svg',
+                    badge: '/icon.svg',
+                    data: { url: '/' },
+                  },
+                )));
+              } catch (error) {
+                console.error('Could not display a task reminder browser notification.', error);
+              }
+            }
+          }
+          if (!browserAlertsReady && document.visibilityState === 'visible') {
+            notify(unseen.length === 1 ? `Reminder: ${unseen[0].body}` : `${unseen.length} new reminders`);
+          }
         }
       } catch (error) {
         if (active) console.error('Notification polling failed; it will retry automatically.', error);
@@ -509,7 +576,31 @@ export default function App() {
       active = false;
       window.clearInterval(interval);
     };
-  }, [user, refreshData]);
+  }, [user, refreshData, browserAlertsReady]);
+
+  useEffect(() => {
+    let active = true;
+    const updatePermission = async () => {
+      const permission = 'Notification' in window ? Notification.permission : 'unsupported';
+      setBrowserPermission(permission);
+      if (permission !== 'granted' || !('serviceWorker' in navigator)) {
+        setBrowserAlertsReady(false);
+        return;
+      }
+      try {
+        const registration = await navigator.serviceWorker.getRegistration();
+        if (active) setBrowserAlertsReady(Boolean(registration));
+      } catch (error) {
+        if (active) console.error('Could not check browser notification setup.', error);
+      }
+    };
+    void updatePermission();
+    window.addEventListener('focus', updatePermission);
+    return () => {
+      active = false;
+      window.removeEventListener('focus', updatePermission);
+    };
+  }, []);
 
   const unreadCount = useMemo(
     () => notifications.filter((notification) => !notification.read_at).length,
@@ -648,8 +739,11 @@ export default function App() {
       const current = await api('/settings/notifications');
       if (!current.publicKey) throw new Error('System notifications are not configured on the server yet.');
       const permission = await Notification.requestPermission();
+      setBrowserPermission(permission);
       if (permission !== 'granted') throw new Error('Allow notifications in your browser to enable system alerts.');
       const registration = await navigator.serviceWorker.register('/sw.js');
+      await navigator.serviceWorker.ready;
+      setBrowserAlertsReady(true);
       let subscription = await registration.pushManager.getSubscription();
       if (!subscription) {
         subscription = await registration.pushManager.subscribe({
@@ -668,6 +762,32 @@ export default function App() {
         systemEnabled: true,
       });
       if (saved) setSettingsNotice('This browser is ready for system reminders.');
+    } catch (error) {
+      setSettingsNotice(error.message);
+    } finally {
+      setSettingsBusy(false);
+    }
+  }
+
+  async function enableBrowserNotifications() {
+    setSettingsBusy(true);
+    setSettingsNotice('');
+    try {
+      if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+        throw new Error('This browser does not support browser notifications.');
+      }
+      if (!window.isSecureContext) {
+        throw new Error('Browser notifications require HTTPS or localhost.');
+      }
+      const permission = await Notification.requestPermission();
+      setBrowserPermission(permission);
+      if (permission !== 'granted') {
+        throw new Error('Allow notifications in your browser to enable task alerts.');
+      }
+      await navigator.serviceWorker.register('/sw.js');
+      await navigator.serviceWorker.ready;
+      setBrowserAlertsReady(true);
+      setSettingsNotice('Browser notifications are enabled while task_keeper is open.');
     } catch (error) {
       setSettingsNotice(error.message);
     } finally {
@@ -803,7 +923,9 @@ export default function App() {
             )}
             <NotificationSettings
               settings={settings}
+              browserPermission={browserPermission}
               onChange={updatePreferences}
+              onEnableBrowser={enableBrowserNotifications}
               onEnableSystem={enableSystemNotifications}
               notice={settingsNotice}
               busy={settingsBusy}

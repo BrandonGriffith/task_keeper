@@ -67,11 +67,11 @@ A task is the recurring schedule; an occurrence is one scheduled instance. Occur
 
 The application supports three notification channels:
 
-1. **In-app:** Durable notification documents are stored in MongoDB, displayed in the Notifications view, and can be marked as read. While signed in, the browser checks for new notifications every 15 seconds, displays a reminder toast, and refreshes the task list when one arrives.
+1. **In-app and foreground browser alerts:** Durable notification documents are stored in MongoDB and displayed in the Notifications view. While signed in, the browser checks for new notifications every 15 seconds and refreshes the task list when one arrives. After the user grants browser notification permission, due-task reminders appear as native browser alerts while task_keeper is open. If alerts have not been enabled, a toast appears while the app tab is visible. Foreground alerts use the service worker and require In-app reminders to be enabled; they do not require VAPID configuration.
 2. **Email:** Optional delivery through SMTP using Nodemailer.
-3. **Browser/system push:** Optional Web Push delivery using VAPID, the browser Push API, and a service worker.
+3. **Background browser push:** Optional Web Push delivery using VAPID, the browser Push API, and a service worker. This can deliver while the app tab is closed.
 
-Email and push are optional integrations. If configuration is missing, delivery stays queued for a later retry and in-app reminders remain available. Browser push requires HTTPS (localhost is allowed), browser notification permission, a service worker, a registered subscription, and configured VAPID keys. Push endpoints are validated against supported secure browser notification services.
+Email and background push are optional integrations. If configuration is missing, delivery stays queued for a later retry and in-app reminders remain available. Foreground browser alerts require notification permission, a service worker, and In-app reminders enabled. Background browser push requires HTTPS (localhost is allowed), browser notification permission, a service worker, a registered subscription, and configured VAPID keys. Push endpoints are validated against supported secure browser notification services.
 
 External notification deliveries use separate MongoDB documents with `pending`, `sending`, `sent`, or `failed` state, retry time, attempt count, and last error. Expired subscriptions that return HTTP 404 or 410 are removed.
 

@@ -64,7 +64,7 @@ The repository-shared [task_keeper control skill](./.github/skills/task-keeper-c
 - Monthly dates that do not occur in a month (for example, the 31st in February) shift to that month's last day and create a schedule-adjustment notification.
 - Yearly tasks reject February 29 and invalid calendar dates.
 - Completion, 30-minute snoozes, missed occurrences, paginated history, archive, and restore.
-- In-app reminders appear in the Notifications view and as a toast while signed in (checked every 15 seconds); email through SMTP and browser push through Web Push/VAPID require server configuration.
+- In-app reminders appear in the Notifications view and as a toast while signed in (checked every 15 seconds). After permission is granted, native browser alerts appear for due-task reminders while task_keeper is open; this does not require VAPID keys. Background Web Push after the app is closed and email through SMTP require their respective server configuration.
 - MongoDB-backed notification delivery outbox with retries for email and browser push.
 - Permanent deletion of archived tasks, history entries, and notifications.
 - Responsive layout with dark mode as the default for new visitors and a saved light/dark theme switch on the sign-in, sign-up, and signed-in pages.
@@ -96,6 +96,6 @@ Optional push settings: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJ
 npx web-push generate-vapid-keys
 ```
 
-Browser push requires HTTPS (except localhost), user permission, a service worker, browser subscription, and server VAPID configuration. Email and push remain queued for retry when their server configuration is incomplete; in-app reminders continue to work.
+Foreground browser alerts require notification permission, a service worker, and In-app reminders enabled. Background push requires HTTPS (except localhost), user permission, a service worker, a browser subscription, and server VAPID configuration. Email and background push remain queued for retry when their server configuration is incomplete; in-app reminders continue to work.
 
 See [overview.md](./overview.md) for detailed architecture, data model, API routes, dependencies, and scheduler behavior.

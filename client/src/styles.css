@@ -746,6 +746,16 @@ h3,
   cursor: pointer;
 }
 
+.browser-alert-row {
+  align-items: flex-start;
+  flex-direction: column;
+  padding: 12px 0;
+}
+
+.browser-alert-row .secondary-button {
+  min-height: 36px;
+}
+
 .preference-row span {
   display: grid;
   gap: 3px;
