@@ -374,6 +374,7 @@ function TaskCard({ task, onEdit, onComplete, onSnooze, onArchive, onRestore, on
 function NotificationSettings({
   settings,
   browserPermission,
+  browserAlertsReady,
   onChange,
   onEnableBrowser,
   onEnableSystem,
@@ -924,6 +925,7 @@ export default function App() {
             <NotificationSettings
               settings={settings}
               browserPermission={browserPermission}
+              browserAlertsReady={browserAlertsReady}
               onChange={updatePreferences}
               onEnableBrowser={enableBrowserNotifications}
               onEnableSystem={enableSystemNotifications}
