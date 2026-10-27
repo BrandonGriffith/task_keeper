@@ -180,10 +180,6 @@ export function nextOccurrence(config, previousDueAt) {
   return followingOccurrence(config, new Date(previousDueAt));
 }
 
-export function validDaysInMonth(year, month) {
-  return daysInMonth(year, month);
-}
-
 export function occurrenceDateAdjusted(config, dueAt) {
   if (config.frequency !== 'monthly') return false;
   const localDay = localDateParts(new Date(dueAt), config.timezone).day;

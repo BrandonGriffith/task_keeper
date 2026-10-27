@@ -10,7 +10,7 @@ export async function api(path, options = {}) {
       ...options,
     });
   } catch {
-    throw new Error('Could not connect to Taskeeper. Check your connection and try again.');
+    throw new Error('Could not connect to Task Keeper. Check your connection and try again.');
   }
 
   if (response.status === 204) return null;
@@ -24,11 +24,4 @@ export async function api(path, options = {}) {
     throw error;
   }
   return data;
-}
-
-export function base64UrlToBytes(value) {
-  const padding = '='.repeat((4 - (value.length % 4)) % 4);
-  const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const raw = window.atob(base64);
-  return Uint8Array.from(raw, (character) => character.charCodeAt(0));
 }
