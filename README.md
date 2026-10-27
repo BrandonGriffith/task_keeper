@@ -63,7 +63,7 @@ The repository-shared [task_keeper control skill](./.github/skills/task-keeper-c
 - Timezone-aware scheduling that retains the local due hour across daylight-saving time changes.
 - Monthly dates that do not occur in a month (for example, the 31st in February) shift to that month's last day and create a schedule-adjustment notification.
 - Yearly tasks reject February 29 and invalid calendar dates.
-- Completion, 30-minute snoozes, missed occurrences, paginated history, archive, and restore.
+- Completion, 30-minute snoozes, missed occurrences, repeat reminders every 10 minutes while a missed occurrence remains open (pausing during snooze), paginated history, archive, and restore.
 - In-app reminders appear in the Notifications view and as a toast while signed in (checked every 15 seconds). The browser tab title shows the unread notification count. After permission is granted, native browser alerts appear for due-task reminders while task_keeper is open; this does not require VAPID keys. Background Web Push and email delivery are server-side integrations and their settings are not exposed in the current UI.
 - MongoDB-backed notification delivery outbox with retries for email and browser push.
 - Permanent deletion of archived tasks, history entries, and notifications.

@@ -116,6 +116,7 @@ async function insertOccurrence(task, dueAt, dateAdjusted, session) {
     missedAt: null,
     completedAt: null,
     initialNotifiedAt: null,
+    lastReminderAt: null,
     snoozedUntil: null,
     createdAt: new Date(),
   };

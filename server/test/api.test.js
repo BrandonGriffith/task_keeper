@@ -49,6 +49,15 @@ async function removeUserData(id) {
   await db.collection('users').deleteOne({ _id: id });
 }
 
+async function runSchedulerTickForTest() {
+  await db.collection('schedulerLocks').updateOne(
+    { _id: 'reminder-scheduler' },
+    { $set: { leaseUntil: new Date(0) } },
+    { upsert: true },
+  );
+  assert.equal(await runSchedulerTick(), true, 'test should acquire the scheduler lease');
+}
+
 describe('Taskeeper API', () => {
   before(async () => {
     db = await connectToDatabase();
@@ -151,14 +160,74 @@ describe('Taskeeper API', () => {
       { _id: occurrence._id },
       { $set: { dueAt: new Date(Date.now() - 3 * 60 * 60_000) } },
     );
-    await runSchedulerTick();
+    await runSchedulerTickForTest();
 
     const missed = await db.collection('occurrences').findOne({ _id: occurrence._id });
     assert.equal(missed.status, 'missed');
+    assert.ok(missed.lastReminderAt instanceof Date, 'initial reminder time should be recorded');
 
     const notifications = (await call('GET', '/api/notifications')).data.notifications;
     const notification = notifications.find((item) => item.occurrence_id === occurrence._id);
     assert.ok(notification, 'missed task should create a notification');
+
+    await db.collection('occurrences').updateOne(
+      { _id: occurrence._id },
+      { $set: { lastReminderAt: new Date(Date.now() - 11 * 60_000) } },
+    );
+    await runSchedulerTickForTest();
+    let reminderCount = await db.collection('notifications').countDocuments({
+      sourceOccurrenceId: occurrence._id,
+    });
+    assert.equal(reminderCount, 2, 'missed task should get a reminder after 10 minutes');
+
+    await runSchedulerTickForTest();
+    reminderCount = await db.collection('notifications').countDocuments({
+      sourceOccurrenceId: occurrence._id,
+    });
+    assert.equal(reminderCount, 2, 'missed task should not be reminded again before 10 minutes');
+
+    assert.equal((await call('POST', `/api/tasks/occurrences/${occurrence._id}/snooze`)).status, 200);
+    await db.collection('occurrences').updateOne(
+      { _id: occurrence._id },
+      { $set: { lastReminderAt: new Date(Date.now() - 11 * 60_000) } },
+    );
+    await runSchedulerTickForTest();
+    reminderCount = await db.collection('notifications').countDocuments({
+      sourceOccurrenceId: occurrence._id,
+    });
+    assert.equal(reminderCount, 2, 'active snooze should pause repeat reminders');
+
+    await db.collection('occurrences').updateOne(
+      { _id: occurrence._id },
+      { $set: { snoozedUntil: new Date(Date.now() - 1000) } },
+    );
+    await runSchedulerTickForTest();
+    reminderCount = await db.collection('notifications').countDocuments({
+      sourceOccurrenceId: occurrence._id,
+    });
+    assert.equal(reminderCount, 3, 'snooze expiry should send a reminder and restart the repeat interval');
+
+    await db.collection('occurrences').updateOne(
+      { _id: occurrence._id },
+      { $set: { lastReminderAt: new Date(Date.now() - 11 * 60_000) } },
+    );
+    await runSchedulerTickForTest();
+    reminderCount = await db.collection('notifications').countDocuments({
+      sourceOccurrenceId: occurrence._id,
+    });
+    assert.equal(reminderCount, 4, 'repeating should resume 10 minutes after the snooze reminder');
+
+    assert.equal((await call('POST', `/api/tasks/occurrences/${occurrence._id}/complete`)).status, 200);
+    await db.collection('occurrences').updateOne(
+      { _id: occurrence._id },
+      { $set: { lastReminderAt: new Date(Date.now() - 11 * 60_000) } },
+    );
+    await runSchedulerTickForTest();
+    reminderCount = await db.collection('notifications').countDocuments({
+      sourceOccurrenceId: occurrence._id,
+    });
+    assert.equal(reminderCount, 4, 'completed occurrence should not be reminded again');
+
     assert.equal((await call('PATCH', `/api/notifications/${notification.id}/read`)).status, 200);
     assert.equal((await call('DELETE', `/api/notifications/${notification.id}`)).status, 204);
     assert.equal((await call('DELETE', `/api/notifications/${notification.id}`)).status, 404);

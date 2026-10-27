@@ -6,6 +6,7 @@ import { getDatabase, withMongoTransaction } from './db.js';
 import { nextOccurrence, occurrenceDateAdjusted } from './recurrence.js';
 
 const intervalMs = 15_000;
+const missedReminderRepeatMs = 10 * 60 * 1000;
 const occurrenceHorizonMs = 7 * 24 * 60 * 60 * 1000;
 const schedulerLeaseMs = 2 * 60 * 1000;
 let timer;
@@ -44,6 +45,7 @@ async function insertOccurrence(task, dueAt, dateAdjusted, session) {
     missedAt: null,
     completedAt: null,
     initialNotifiedAt: null,
+    lastReminderAt: null,
     snoozedUntil: null,
     createdAt: new Date(),
   };
@@ -194,18 +196,26 @@ function notificationPreferences(user) {
   };
 }
 
-async function insertReminder(occurrence, task, user, session) {
+async function insertReminder(occurrence, task, user, session, { repeated = false } = {}) {
   const database = getDatabase();
+  const now = new Date();
   const notification = {
     _id: randomUUID(),
     userId: occurrence.userId,
     sourceOccurrenceId: occurrence._id,
     kind: 'reminder',
-    title: 'Task due',
-    body: `“${task.title}” is due. Mark it complete or snooze it for 30 minutes.`,
+    title: repeated ? 'Task still missed' : 'Task due',
+    body: repeated
+      ? `“${task.title}” is still missed. Complete it or snooze it for 30 minutes.`
+      : `“${task.title}” is due. Mark it complete or snooze it for 30 minutes.`,
     readAt: null,
-    createdAt: new Date(),
+    createdAt: now,
   };
+  await database.collection('occurrences').updateOne(
+    { _id: occurrence._id, supersededAt: { $exists: false } },
+    { $set: { lastReminderAt: now } },
+    session ? { session } : {},
+  );
   await database.collection('notifications').insertOne(
     notification,
     session ? { session } : {},
@@ -242,6 +252,7 @@ async function createDueReminders() {
     status: 'pending',
     supersededAt: { $exists: false },
     initialNotifiedAt: null,
+    lastReminderAt: null,
     snoozedUntil: null,
     dueAt: { $lte: new Date() },
   }).sort({ dueAt: 1 }).limit(100).toArray();
@@ -312,6 +323,53 @@ async function createDueReminders() {
         { session },
       );
       await insertReminder(updated, task, user, session);
+    });
+  }
+
+  const now = new Date();
+  const repeatBefore = new Date(now.getTime() - missedReminderRepeatMs);
+  const repeatable = await occurrences.find({
+    status: 'missed',
+    supersededAt: { $exists: false },
+    snoozedUntil: null,
+    dueAt: { $lte: now },
+    $or: [
+      { lastReminderAt: { $lte: repeatBefore } },
+      {
+        lastReminderAt: { $exists: false },
+        initialNotifiedAt: { $lte: repeatBefore },
+      },
+    ],
+  }).sort({ lastReminderAt: 1, initialNotifiedAt: 1 }).limit(100).toArray();
+
+  for (const occurrence of repeatable) {
+    await withMongoTransaction(async (session) => {
+      const current = await occurrences.findOne({
+        _id: occurrence._id,
+        status: 'missed',
+        supersededAt: { $exists: false },
+        snoozedUntil: null,
+        dueAt: { $lte: new Date() },
+        $or: [
+          { lastReminderAt: { $lte: repeatBefore } },
+          {
+            lastReminderAt: { $exists: false },
+            initialNotifiedAt: { $lte: repeatBefore },
+          },
+        ],
+      }, { session });
+      if (!current) return;
+      const task = await database.collection('tasks').findOne({
+        _id: current.taskId,
+        userId: current.userId,
+        archived: false,
+      }, { session });
+      if (!task) return;
+      const user = await database.collection('users').findOne(
+        { _id: current.userId },
+        { session },
+      );
+      await insertReminder(current, task, user, session, { repeated: true });
     });
   }
 }

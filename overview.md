@@ -57,6 +57,7 @@ A task is the recurring schedule; an occurrence is one scheduled instance. Occur
 
 - New occurrences start as `pending`.
 - When a due time passes without completion or an active snooze, the scheduler marks the occurrence `missed`, records `missedAt`, and creates a reminder. A pending occurrence already snoozed is skipped until the snooze expires.
+- Open missed occurrences generate another reminder every 10 minutes. Snoozing pauses repeats until the snooze expires; the snooze reminder then restarts the 10-minute interval. Completing the occurrence stops reminders.
 - Pending or missed occurrences can be completed. Completing an occurrence advances the task to its next open occurrence.
 - Each snooze click adds 30 minutes to the later of the existing snooze deadline or the current time. The task card shows the updated deadline, and the scheduler creates a follow-up reminder when it arrives.
 - Editing a task supersedes any already-due open occurrence and clears its snooze, while retaining the missed occurrence in history. Future occurrences for the old schedule are removed and replaced with the edited schedule.
@@ -147,7 +148,7 @@ The root package uses npm workspaces to coordinate the client and server:
 - `server/src/db.js` owns the MongoDB client lifecycle, selected database, and startup index creation.
 - `server/src/tasks.js` implements task/occurrence APIs, response mapping, user ownership checks, and lifecycle updates.
 - `server/src/recurrence.js` calculates timezone-aware first and subsequent occurrences.
-- `server/src/scheduler.js` fills the occurrence schedule, creates missed/snooze reminders, and processes email/push delivery documents.
+- `server/src/scheduler.js` fills the occurrence schedule, creates initial, snooze-expiry, and 10-minute repeat reminders for open missed occurrences, and processes email/push delivery documents.
 - `server/src/notifications.js` implements notification queries, read state, preferences, and push subscriptions.
 - `server/src/validation.js` validates task input and calendar constraints.
 - `server/src/config.js` loads `.env` and validates required/optional runtime configuration.
