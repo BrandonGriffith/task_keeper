@@ -121,6 +121,11 @@ function AuthScreen({ onSignedIn, darkMode, onThemeChange }) {
   );
 }
 
+function defaultDueTime(now = new Date()) {
+  const suggested = new Date(now.getTime() + 10 * 60_000);
+  return `${String(suggested.getHours()).padStart(2, '0')}:${String(suggested.getMinutes()).padStart(2, '0')}`;
+}
+
 function TaskForm({ task, onClose, onSave }) {
   const now = new Date();
   const monthLength = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
@@ -128,7 +133,7 @@ function TaskForm({ task, onClose, onSave }) {
     title: task?.title ?? '',
     description: task?.description ?? '',
     frequency: task?.frequency ?? 'daily',
-    dueTime: task?.due_time?.slice(0, 5) ?? '17:00',
+    dueTime: task?.due_time?.slice(0, 5) ?? defaultDueTime(now),
     timezone: task?.timezone ?? localTimezone(),
     weeklyDay: task?.weekly_day ?? now.getDay(),
     monthlyDay: task?.monthly_day ?? Math.min(now.getDate(), monthLength),
@@ -226,6 +231,12 @@ function TaskForm({ task, onClose, onSave }) {
                 value={form.dueTime}
                 onChange={(event) => setForm({ ...form, dueTime: event.target.value })}
               />
+              {!task && (
+                <small>
+                  Defaults to 10 minutes from now. The first occurrence is today if this time
+                  has not passed; otherwise, it starts at the next scheduled time.
+                </small>
+              )}
             </label>
           </div>
           {form.frequency === 'weekly' && (

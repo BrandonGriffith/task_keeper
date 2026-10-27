@@ -41,7 +41,7 @@ Tasks have a title, optional notes, frequency, local due time, timezone, and rec
 
 Additional scheduling behavior:
 
-- The default due time is 5:00 p.m. and the browser's local timezone is used when creating a task.
+- New tasks default to a due time 10 minutes from the current device time; the browser's local timezone is used. The first occurrence is today if its scheduled time has not passed yet, otherwise it begins at the next matching schedule.
 - Server validation checks required recurrence fields, title and notes length, due-time format, timezone identifiers, and valid yearly calendar dates.
 - Monthly dates unavailable in a particular month are clamped to that month's final day. For example, a task scheduled on the 31st occurs on February's final day. The app records the adjustment and creates a schedule-adjustment notification.
 - February 29 is excluded from yearly schedules.

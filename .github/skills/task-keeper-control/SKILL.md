@@ -54,7 +54,7 @@ Use the browser UI for requested task_keeper operations and frontend testing. Do
 
 ## Task workflows
 
-Task schedules use the device timezone (not editable) and default to 5:00 p.m. Daily, weekly, monthly, and yearly schedules are supported. Always set **Due time** explicitly when timing matters; the form's default is not a reliable assumption.
+Task schedules use the device timezone (not editable) and default new tasks to 10 minutes from the current device time. Daily, weekly, monthly, and yearly schedules are supported. The first occurrence is today if its scheduled time is still ahead; otherwise it starts at the next matching schedule. Set **Due time** explicitly when timing matters.
 
 1. Create a uniquely named task (for example, `Smoke Daily <yyyymmdd-hhmm>`) through **＋ New task** or **Create your first task**. Fill the labeled fields from the UI map, submit with **Create task**, and verify the new card and its schedule text. Weekly tasks need a weekday; monthly tasks need a day; yearly tasks need a month and day.
 2. For recurrence coverage, create one test task for each frequency. The **Day of month** list only offers days that exist in the current month, so day 31 is selectable only in 31-day months; a saved day 31 is shown with a short-month note. The yearly **Day** list caps February at 28, so Feb 29 cannot be chosen. Monthly day 31 clamps to the final day of shorter months and can produce a schedule-adjustment notification.
