@@ -67,7 +67,7 @@ A task is the recurring schedule; an occurrence is one scheduled instance. Occur
 
 The application supports three notification channels:
 
-1. **In-app and foreground browser alerts:** Durable notification documents are stored in MongoDB and displayed in the Notifications view. While signed in, the browser checks for new notifications every 15 seconds and refreshes the task list when one arrives. After the user grants browser notification permission, due-task reminders appear as native browser alerts while task_keeper is open. If alerts have not been enabled, a toast appears while the app tab is visible. Foreground alerts use the service worker and require In-app reminders to be enabled; they do not require VAPID configuration.
+1. **In-app and foreground browser alerts:** Durable notification documents are stored in MongoDB and displayed in the Notifications view. While signed in, the browser checks for new notifications every 15 seconds and refreshes the task list when one arrives. The browser tab title shows the current unread notification count. After the user grants browser notification permission, due-task reminders appear as native browser alerts while task_keeper is open. If alerts have not been enabled, a toast appears while the app tab is visible. Foreground alerts use the service worker and require In-app reminders to be enabled; they do not require VAPID configuration.
 2. **Email:** Optional delivery through SMTP using Nodemailer.
 3. **Background browser push:** Optional Web Push delivery using VAPID, the browser Push API, and a service worker. This can deliver while the app tab is closed.
 

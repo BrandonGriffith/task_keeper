@@ -619,6 +619,10 @@ export default function App() {
     [notifications],
   );
 
+  useEffect(() => {
+    document.title = unreadCount > 0 ? `(${unreadCount}) task_keeper` : 'task_keeper';
+  }, [unreadCount]);
+
   function notify(message) {
     setToast(message);
     window.setTimeout(() => setToast(''), 3200);
