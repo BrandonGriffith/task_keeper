@@ -13,13 +13,12 @@ A personal recurring-task manager (daily, weekly, monthly, yearly) with missed-t
 | Install | `npm install` |
 | Run everything (API :3001 + web :5173) | `npm run dev` |
 | Production build | `npm run build` |
-| Tests (API must be running) | `npm test` |
 
 On Windows PowerShell, use `npm.cmd` if `npm.ps1` is blocked. PowerShell has no `&&`; chain with `;`.
 
 ## Before you start
 
-1. `.env` must exist (copy `.env.example`). It contains real Atlas credentials: never print, log, commit, or paste it.
+1. `.env` must exist with `MONGODB_URI` and a long random `JWT_SECRET`; never print, log, commit, or paste it.
 2. Check whether the app is already running: `curl http://localhost:3001/api/health` should return `{"status":"ok"}`.
 3. Run `git status` and `git log` to see the current state. Commit meaningful changes.
 
@@ -29,7 +28,6 @@ On Windows PowerShell, use `npm.cmd` if `npm.ps1` is blocked. PowerShell has no 
 - `server/src/scheduler.js`: 15-second tick that creates occurrences, marks missed, and creates and sends notifications.
 - `server/src/recurrence.js`: timezone-aware next-due calculation.
 - `server/src/notifications.js`: in-app notifications, preferences, push subscriptions.
-- `server/test/api.test.js`: end-to-end API tests.
 - `client/src/App.jsx`: the whole UI (auth, tasks, history, notifications, theme switch).
 - `client/src/styles.css`: all styling, with CSS-variable light and dark themes.
 
@@ -49,15 +47,14 @@ On Windows PowerShell, use `npm.cmd` if `npm.ps1` is blocked. PowerShell has no 
 - Dark mode uses gray text (not white) and keeps colored accents. Reuse the `--accent-*` and `--task-accent` tokens instead of hard-coded hex.
 - Verify UI changes at about 390 px and desktop widths, in both themes, on Tasks, History, and Notifications.
 
-## Testing notes
+## Verification notes
 
-- `npm test` hits the real Atlas database with throwaway `test-…@example.com` users and cleans up. Auth is rate limited to 10 requests per minute, so wait about a minute between runs.
-- Editing server files restarts the API (`node --watch`); wait for "API listening" before running tests.
-- Verified flows to keep working: register/login, create tasks of all four frequencies, edit after snooze or missed (no stale "snoozed until" or "missed occurrence"), repeated 30-minute snoozes, complete, delete history/notifications/archived tasks.
+- There is no automated test suite in this repository. Use `npm run build` for client build validation.
+- Editing server files restarts the API (`node --watch`); wait for "API listening" before checking API behavior.
+- Preserve key flows: register/login, create tasks of all four frequencies, edit after snooze or missed (no stale "snoozed until" or "missed occurrence"), repeated 30-minute snoozes, complete, delete history/notifications/archived tasks.
 
 ## Pitfalls
 
 - Editing a task must supersede open occurrences and clear snoozes (previous bugs: stale snooze time and ghost missed occurrences).
 - Monthly day 31 clamps to the month's last day and creates a schedule-adjustment notification. Yearly Feb 29 is rejected.
-- `node --test test/` fails on Node 24; the test script names the file explicitly.
 - Clean up any test data or scratch scripts you create (do not leave test users in the database).

@@ -235,6 +235,7 @@ router.get('/', async (request, response) => {
 
   const occurrences = await database.collection('occurrences')
     .find({
+      userId: request.user.id,
       taskId: { $in: tasks.map((task) => task._id) },
       status: { $in: ['pending', 'missed'] },
       supersededAt: { $exists: false },

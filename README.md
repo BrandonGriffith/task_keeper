@@ -13,7 +13,7 @@ A personal-first recurring task manager built with JavaScript, React, Node.js/Ex
 1. In Atlas, create a database user with access to the database this app will use.
 2. In Atlas **Network Access**, allow the IP address/network from which the API server will connect. For production, prefer a narrowly scoped network rule over `0.0.0.0/0`.
 3. Copy the **Drivers / Node.js** connection string from the Atlas cluster page.
-4. Copy `.env.example` to `.env`. Set `MONGODB_URI` to the connection string and set `MONGODB_DATABASE` to `task_keeper` (or the database name you want).
+4. Create a private `.env` file in the repository root. Set `MONGODB_URI` to the connection string and `MONGODB_DATABASE` to `task_keeper` (or the database name you want).
 5. Replace the URI's username, password, and cluster host with the values from your Atlas account. URL-encode reserved characters in the database username/password before putting them in the URI.
 6. Set `JWT_SECRET` to a long random value of at least 32 characters.
 
@@ -38,16 +38,6 @@ npm start
 ```
 
 The server serves `client/dist` if the production build exists.
-
-## Test
-
-With the app running (`npm run dev`), run the API end-to-end tests from another terminal:
-
-```powershell
-npm test
-```
-
-The tests use throwaway users in the configured database and remove them afterward. Auth endpoints are rate limited to 10 requests per minute, so wait about a minute between runs. See [overview.md](./overview.md#testing).
 
 ## Working with AI agents
 

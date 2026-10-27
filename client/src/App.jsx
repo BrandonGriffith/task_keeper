@@ -762,11 +762,22 @@ export default function App() {
   }
 
   async function signOut() {
-    await api('/auth/logout', { method: 'POST', body: '{}' });
-    setUser(null);
-    setTasks([]);
-    setNotifications([]);
-    setSettings(null);
+    try {
+      await api('/auth/logout', { method: 'POST', body: '{}' });
+      setUser(null);
+      setTasks([]);
+      setArchivedTasks([]);
+      setHistory([]);
+      setHistoryNextOffset(null);
+      setNotifications([]);
+      setSettings(null);
+      setPageError('');
+      setShowArchived(false);
+      setTab('tasks');
+      notificationIds.current.clear();
+    } catch (error) {
+      setPageError(error.message);
+    }
   }
 
   if (!authChecked) {

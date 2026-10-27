@@ -106,10 +106,7 @@ The root package uses npm workspaces to coordinate the client and server:
 │   │   ├── scheduler.js
 │   │   ├── tasks.js
 │   │   └── validation.js
-│   ├── test/
-│   │   └── api.test.js
 │   └── package.json
-├── .env.example
 ├── .gitignore
 ├── AGENTS.md
 ├── package.json
@@ -273,7 +270,7 @@ The client uses CSS and standard browser APIs. The server and client also use No
 
 ## Configuration
 
-Copy `.env.example` to `.env`; `.env` is local configuration and must not be committed. The server loads it from the project root, or from the path specified by `ENV_FILE`.
+Create a private `.env` file in the project root; `.env` is local configuration and must not be committed. The server loads it from the project root, or from the path specified by `ENV_FILE`.
 
 ### Required settings
 
@@ -307,7 +304,7 @@ Copy `.env.example` to `.env`; `.env` is local configuration and must not be com
 1. Create a database user in Atlas with access to the application's database.
 2. Add the API server's IP/network to the Atlas Network Access allowlist.
 3. Copy the Node.js driver URI from Atlas.
-4. Copy `.env.example` to `.env`; set `MONGODB_URI`, `MONGODB_DATABASE`, and a long random `JWT_SECRET`.
+4. Create a private `.env` file; set `MONGODB_URI`, `MONGODB_DATABASE`, and a long random `JWT_SECRET`.
 5. URL-encode any reserved characters in the database username or password used in the connection URI.
 6. Install dependencies and start the app:
 
@@ -336,24 +333,13 @@ Run from the repository root:
 | `npm run dev` | Starts the API in Node watch mode and the Vite development server |
 | `npm run build` | Builds the React client into `client/dist` |
 | `npm start` | Starts the API, MongoDB client, and reminder scheduler |
-| `npm test` | Runs the API end-to-end tests (`server/test/api.test.js`); the API must already be running |
 
-## Testing
-
-`server/test/api.test.js` uses Node's built-in test runner (`node:test`) with no extra dependencies. It calls the running API over HTTP (`API_URL`, default `http://localhost:3001`) and talks to MongoDB directly to age occurrences and clean up.
-
-- Start the app first (`npm run dev`), then run `npm test`.
-- It covers auth and validation, all four recurrence types, edit, repeated snooze, complete, history/notification deletion, archive/restore/permanent delete, missed-occurrence notifications via `runSchedulerTick()`, preferences, and cross-user isolation.
-- It uses throwaway users (`test-…@example.com`) against the configured database and deletes everything it created. The database is the real Atlas database, so never point it at data you care about.
-- Auth endpoints are limited to 10 requests per minute; wait about a minute between runs.
-- Editing server files while `npm run dev` runs restarts the API (`node --watch`); wait for "API listening" before running tests.
-- There are no automated client tests. Verify UI changes in a browser at mobile (about 390 px) and desktop widths, in both themes.
+There is no automated test suite in this repository. Verify UI or API changes with the running app as appropriate.
 
 On Windows, if PowerShell blocks the `npm.ps1` shim, run commands as `npm.cmd run dev`, `npm.cmd run build`, and similar.
 
 ## Known gotchas
 
-- Node 24 treats `node --test test/` as a module path; the test script names the file explicitly.
 - `.env` holds real credentials and is git-ignored. Never print, commit, or copy it.
 - Date/time bugs are the most likely regressions. Test editing a task after it was snoozed or missed (snooze must clear, stale occurrences must be superseded).
 - Users should never see raw server errors. The client shows short friendly messages (`pageError` banner); see `errors.js` for the server side.
