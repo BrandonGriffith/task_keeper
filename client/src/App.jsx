@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { api, base64UrlToBytes } from './api.js';
+import { api } from './api.js';
 
 const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -388,12 +388,11 @@ function NotificationSettings({
   browserAlertsReady,
   onChange,
   onEnableBrowser,
-  onEnableSystem,
   notice,
   busy,
 }) {
   if (!settings) return null;
-  const { preferences, availability } = settings;
+  const { preferences } = settings;
   let browserAlertStatus = 'Permission is needed to show task reminders';
   if (!('Notification' in window) || !('serviceWorker' in navigator)) {
     browserAlertStatus = 'Not supported by this browser';
@@ -444,36 +443,7 @@ function NotificationSettings({
           onChange={(event) => onChange({ ...preferences, inAppEnabled: event.target.checked })}
         />
       </label>
-      <label className="preference-row">
-        <span>
-          <strong>Email</strong>
-          <small>{availability.email ? 'Email delivery is configured' : 'Needs server email configuration'}</small>
-        </span>
-        <input
-          type="checkbox"
-          checked={preferences.email_enabled}
-          disabled={busy}
-          onChange={(event) => onChange({ ...preferences, emailEnabled: event.target.checked })}
-        />
-      </label>
-      <label className="preference-row">
-        <span>
-          <strong>Background push</strong>
-          <small>{availability.system ? 'Push delivery is configured' : 'Needs server push configuration'}</small>
-        </span>
-        <input
-          type="checkbox"
-          checked={preferences.system_enabled}
-          disabled={busy}
-          onChange={(event) => onChange({ ...preferences, systemEnabled: event.target.checked })}
-        />
-      </label>
-      <button className="secondary-button setup-push" onClick={onEnableSystem} disabled={busy}>
-        Enable background push on this browser
-      </button>
       {notice && <p className="settings-notice" role="status">{notice}</p>}
-      {!availability.email && <p className="settings-hint">Email reminders stay queued until SMTP is configured.</p>}
-      {!availability.system && <p className="settings-hint">Background push reminders stay queued until VAPID push keys are configured.</p>}
     </section>
   );
 }
@@ -742,49 +712,6 @@ export default function App() {
     }
   }
 
-  async function enableSystemNotifications() {
-    setSettingsBusy(true);
-    setSettingsNotice('');
-    try {
-      if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
-        throw new Error('This browser does not support system push notifications.');
-      }
-      if (!window.isSecureContext) {
-        throw new Error('Browser notifications require HTTPS or localhost.');
-      }
-      const current = await api('/settings/notifications');
-      if (!current.publicKey) throw new Error('System notifications are not configured on the server yet.');
-      const permission = await Notification.requestPermission();
-      setBrowserPermission(permission);
-      if (permission !== 'granted') throw new Error('Allow notifications in your browser to enable system alerts.');
-      const registration = await navigator.serviceWorker.register('/sw.js');
-      await navigator.serviceWorker.ready;
-      setBrowserAlertsReady(true);
-      let subscription = await registration.pushManager.getSubscription();
-      if (!subscription) {
-        subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: base64UrlToBytes(current.publicKey),
-        });
-      }
-      await api('/push-subscriptions', {
-        method: 'POST',
-        body: JSON.stringify(subscription),
-      });
-      const saved = await updatePreferences({
-        ...current.preferences,
-        inAppEnabled: current.preferences.in_app_enabled,
-        emailEnabled: current.preferences.email_enabled,
-        systemEnabled: true,
-      });
-      if (saved) setSettingsNotice('This browser is ready for system reminders.');
-    } catch (error) {
-      setSettingsNotice(error.message);
-    } finally {
-      setSettingsBusy(false);
-    }
-  }
-
   async function enableBrowserNotifications() {
     setSettingsBusy(true);
     setSettingsNotice('');
@@ -943,7 +870,6 @@ export default function App() {
               browserAlertsReady={browserAlertsReady}
               onChange={updatePreferences}
               onEnableBrowser={enableBrowserNotifications}
-              onEnableSystem={enableSystemNotifications}
               notice={settingsNotice}
               busy={settingsBusy}
             />

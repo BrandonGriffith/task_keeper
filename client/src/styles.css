@@ -106,7 +106,6 @@ h3,
 .task-meta,
 .task-description,
 .timezone-note,
-.settings-hint,
 .settings-notice {
   color: var(--muted);
 }
@@ -777,13 +776,6 @@ h3,
   accent-color: var(--green);
 }
 
-.setup-push {
-  min-height: 34px;
-  margin-top: 10px;
-  font-size: 0.74rem;
-}
-
-.settings-hint,
 .settings-notice {
   margin: 11px 0 0;
   font-size: 0.72rem;

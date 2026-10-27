@@ -71,7 +71,7 @@ The application supports three notification channels:
 2. **Email:** Optional delivery through SMTP using Nodemailer.
 3. **Background browser push:** Optional Web Push delivery using VAPID, the browser Push API, and a service worker. This can deliver while the app tab is closed.
 
-Email and background push are optional integrations. If configuration is missing, delivery stays queued for a later retry and in-app reminders remain available. Foreground browser alerts require notification permission, a service worker, and In-app reminders enabled. Background browser push requires HTTPS (localhost is allowed), browser notification permission, a service worker, a registered subscription, and configured VAPID keys. Push endpoints are validated against supported secure browser notification services.
+Email and background push are optional server-side integrations; their settings are not exposed in the current UI yet. If configuration is missing, delivery stays queued for a later retry and in-app reminders remain available. Foreground browser alerts require notification permission, a service worker, and In-app reminders enabled. Background browser push requires HTTPS (localhost is allowed), browser notification permission, a service worker, a registered subscription, and configured VAPID keys. Push endpoints are validated against supported secure browser notification services.
 
 External notification deliveries use separate MongoDB documents with `pending`, `sending`, `sent`, or `failed` state, retry time, attempt count, and last error. Expired subscriptions that return HTTP 404 or 410 are removed.
 
@@ -121,7 +121,7 @@ The root package uses npm workspaces to coordinate the client and server:
 
 ### Client
 
-- `client/src/App.jsx` implements account forms, task creation/editing, active/archived lists, task actions, history, notifications, notification settings, and push setup.
+- `client/src/App.jsx` implements account forms, task creation/editing, active/archived lists, task actions, history, notifications, and in-app/foreground browser reminder settings. Email and background push remain server-side integrations without UI controls.
 - `client/src/api.js` is the same-origin JSON API helper and converts a VAPID base64url key to the browser Push API's byte format.
 - `client/src/main.jsx` mounts React.
 - `client/src/styles.css` contains the responsive application styling and light/dark color palettes.
