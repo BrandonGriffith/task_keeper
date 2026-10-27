@@ -53,6 +53,8 @@ The tests use throwaway users in the configured database and remove them afterwa
 
 [AGENTS.md](./AGENTS.md) summarizes commands, conventions, UI rules, and pitfalls for AI coding agents such as Codex or Copilot.
 
+The repository-shared [task_keeper control skill](./.github/skills/task-keeper-control/SKILL.md) provides a safe, browser-first workflow for frontend testing and task management.
+
 ## Features
 
 - User registration and login with bcrypt password hashes, signed HTTP-only JWT cookies, and rate-limited authentication endpoints.
