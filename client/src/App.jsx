@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api, base64UrlToBytes } from './api.js';
 
 const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -23,7 +23,24 @@ function formatDue(instant, timezone) {
   }).format(new Date(instant));
 }
 
-function AuthScreen({ onSignedIn }) {
+function ThemeFooter({ darkMode, onThemeChange }) {
+  return (
+    <footer className="theme-footer">
+      <label className="theme-switch">
+        <span>Dark mode</span>
+        <input
+          type="checkbox"
+          role="switch"
+          checked={darkMode}
+          onChange={(event) => onThemeChange(event.target.checked)}
+        />
+        <span className="theme-switch-track" aria-hidden="true" />
+      </label>
+    </footer>
+  );
+}
+
+function AuthScreen({ onSignedIn, darkMode, onThemeChange }) {
   const [mode, setMode] = useState('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -99,6 +116,7 @@ function AuthScreen({ onSignedIn }) {
           </button>
         </p>
       </div>
+      <ThemeFooter darkMode={darkMode} onThemeChange={onThemeChange} />
     </main>
   );
 }
@@ -410,7 +428,10 @@ function NotificationSettings({ settings, onChange, onEnableSystem, notice, busy
 export default function App() {
   const [user, setUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
-  const [darkMode, setDarkMode] = useState(() => window.localStorage.getItem('theme') === 'dark');
+  const [darkMode, setDarkMode] = useState(() => {
+    const savedTheme = window.localStorage.getItem('theme');
+    return savedTheme === null || savedTheme === 'dark';
+  });
   const [tab, setTab] = useState('tasks');
   const [tasks, setTasks] = useState([]);
   const [archivedTasks, setArchivedTasks] = useState([]);
@@ -426,7 +447,7 @@ export default function App() {
   const [settingsNotice, setSettingsNotice] = useState('');
   const notificationIds = useRef(new Set());
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.documentElement.dataset.theme = darkMode ? 'dark' : 'light';
     window.localStorage.setItem('theme', darkMode ? 'dark' : 'light');
   }, [darkMode]);
@@ -688,7 +709,15 @@ export default function App() {
   if (!authChecked) {
     return <main className="loading-screen"><div className="brand-mark">t</div><p>Getting things ready…</p></main>;
   }
-  if (!user) return <AuthScreen onSignedIn={setUser} />;
+  if (!user) {
+    return (
+      <AuthScreen
+        onSignedIn={setUser}
+        darkMode={darkMode}
+        onThemeChange={setDarkMode}
+      />
+    );
+  }
 
   const visibleTasks = showArchived ? archivedTasks : tasks;
   return (
@@ -871,18 +900,7 @@ export default function App() {
             ) : <div className="empty-state"><h2>All quiet for now</h2><p>Your reminders and schedule notices will show up here.</p></div>}
           </div>
         )}
-        <footer className="theme-footer">
-          <label className="theme-switch">
-            <span>Dark mode</span>
-            <input
-              type="checkbox"
-              role="switch"
-              checked={darkMode}
-              onChange={(event) => setDarkMode(event.target.checked)}
-            />
-            <span className="theme-switch-track" aria-hidden="true" />
-          </label>
-        </footer>
+        <ThemeFooter darkMode={darkMode} onThemeChange={setDarkMode} />
       </main>
       {toast && <div className="toast" role="status">{toast}</div>}
       {modalTask !== undefined && (

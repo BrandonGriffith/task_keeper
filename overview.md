@@ -125,7 +125,7 @@ The root package uses npm workspaces to coordinate the client and server:
 - `client/src/api.js` is the same-origin JSON API helper and converts a VAPID base64url key to the browser Push API's byte format.
 - `client/src/main.jsx` mounts React.
 - `client/src/styles.css` contains the responsive application styling and light/dark color palettes.
-- A theme toggle appears at the bottom of each signed-in page. The selection is saved in browser local storage (`theme`) and applied as `data-theme` on `<html>`.
+- Dark mode is the default when no browser theme preference is saved. The theme toggle appears at the bottom of the sign-in/sign-up screen and each signed-in page; the selection is saved in browser local storage (`theme`) and applied as `data-theme` on `<html>`.
   - The control is an accessible checkbox with `role="switch"` and the label "Dark mode", inside `<footer class="theme-footer">`.
   - The footer is in normal document flow on every viewport (it sits after the page content). It must not be `position: fixed` or sticky: that previously covered content or hid the switch on mobile.
 

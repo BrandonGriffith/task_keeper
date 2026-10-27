@@ -133,7 +133,15 @@ h3,
   font-weight: 800;
 }
 
-.auth-shell,
+.auth-shell {
+  display: grid;
+  min-height: 100vh;
+  min-height: 100dvh;
+  grid-template-rows: 1fr auto;
+  place-items: center;
+  padding: 24px;
+}
+
 .loading-screen {
   display: grid;
   min-height: 100vh;
@@ -462,6 +470,38 @@ h3,
   margin: auto auto 0;
   padding: 0 clamp(22px, 5vw, 66px) 24px;
   text-align: center;
+}
+
+.auth-shell .theme-footer {
+  width: min(100%, 430px);
+  margin: 0;
+  padding: 16px 0 0;
+}
+
+@media (max-height: 700px) {
+  .auth-shell {
+    padding: 12px 24px;
+  }
+
+  .auth-card {
+    padding: 24px 34px;
+  }
+
+  .auth-card .brand-mark {
+    margin-bottom: 18px;
+  }
+
+  .auth-card > .muted {
+    margin-bottom: 16px;
+  }
+
+  .auth-card .stack-form {
+    gap: 12px;
+  }
+
+  .auth-shell .theme-footer {
+    padding-top: 8px;
+  }
 }
 
 .theme-switch {

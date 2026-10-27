@@ -65,7 +65,7 @@ The tests use throwaway users in the configured database and remove them afterwa
 - In-app reminders appear in the Notifications view and as a toast while signed in (checked every 15 seconds); email through SMTP and browser push through Web Push/VAPID require server configuration.
 - MongoDB-backed notification delivery outbox with retries for email and browser push.
 - Permanent deletion of archived tasks, history entries, and notifications.
-- Responsive layout with a light/dark theme switch at the bottom of every page (saved in the browser).
+- Responsive layout with dark mode as the default for new visitors and a saved light/dark theme switch on the sign-in, sign-up, and signed-in pages.
 
 ## Environment variables
 

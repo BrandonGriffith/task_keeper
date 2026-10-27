@@ -45,7 +45,7 @@ On Windows PowerShell, use `npm.cmd` if `npm.ps1` is blocked. PowerShell has no 
 ## UI rules (the user cares about these)
 
 - Mobile must remain a full-width single column. Do not shrink it into a small box or leave large empty areas.
-- The dark-mode switch lives in `.theme-footer`, at the bottom of every page, in normal flow. Do not make it `fixed` or `sticky`: that has repeatedly covered content or hidden it.
+- Dark mode is the default when no theme preference is saved. The switch lives in `.theme-footer` at the bottom of sign-in/sign-up and signed-in pages, in normal flow. Do not make it `fixed` or `sticky`: that has repeatedly covered content or hidden it.
 - Dark mode uses gray text (not white) and keeps colored accents. Reuse the `--accent-*` and `--task-accent` tokens instead of hard-coded hex.
 - Verify UI changes at about 390 px and desktop widths, in both themes, on Tasks, History, and Notifications.
 
