@@ -468,6 +468,8 @@ export default function App() {
   const [showArchived, setShowArchived] = useState(false);
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [settingsNotice, setSettingsNotice] = useState('');
+  const [clearingHistory, setClearingHistory] = useState(false);
+  const [clearingNotifications, setClearingNotifications] = useState(false);
   const [browserPermission, setBrowserPermission] = useState(() => (
     'Notification' in window ? Notification.permission : 'unsupported'
   ));
@@ -677,6 +679,22 @@ export default function App() {
     }
   }
 
+  async function clearHistory() {
+    if (!window.confirm('Clear all completed and missed history entries? Notifications linked to those entries will also be deleted. This cannot be undone.')) {
+      return;
+    }
+    setClearingHistory(true);
+    try {
+      await api('/tasks/history', { method: 'DELETE' });
+      await refreshData();
+      notify('History cleared.');
+    } catch (error) {
+      setPageError(error.message);
+    } finally {
+      setClearingHistory(false);
+    }
+  }
+
   async function deleteNotification(notification) {
     if (!window.confirm(`Delete the "${notification.title}" notification?`)) return;
     try {
@@ -686,6 +704,22 @@ export default function App() {
       notify('Notification deleted.');
     } catch (error) {
       setPageError(error.message);
+    }
+  }
+
+  async function clearNotifications() {
+    if (!window.confirm('Clear all notifications and their pending deliveries? This cannot be undone.')) {
+      return;
+    }
+    setClearingNotifications(true);
+    try {
+      await api('/notifications', { method: 'DELETE' });
+      await refreshData();
+      notify('Notifications cleared.');
+    } catch (error) {
+      setPageError(error.message);
+    } finally {
+      setClearingNotifications(false);
     }
   }
 
@@ -895,6 +929,15 @@ export default function App() {
                 <h1>Task history</h1>
                 <p className="muted">Completed and missed occurrences stay here.</p>
               </div>
+              {history.length > 0 && (
+                <button
+                  className="quiet-button danger-button clear-all-button"
+                  onClick={clearHistory}
+                  disabled={clearingHistory}
+                >
+                  {clearingHistory ? 'Clearing…' : 'Clear history'}
+                </button>
+              )}
             </div>
             {history.length ? (
               <>
@@ -941,6 +984,15 @@ export default function App() {
                 <h1>Notifications</h1>
                 <p className="muted">Reminders and schedule updates from your tasks.</p>
               </div>
+              {notifications.length > 0 && (
+                <button
+                  className="quiet-button danger-button clear-all-button"
+                  onClick={clearNotifications}
+                  disabled={clearingNotifications}
+                >
+                  {clearingNotifications ? 'Clearing…' : 'Clear notifications'}
+                </button>
+              )}
             </div>
             {notifications.length ? (
               <div className="notification-list">

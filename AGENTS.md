@@ -51,10 +51,10 @@ On Windows PowerShell, use `npm.cmd` if `npm.ps1` is blocked. PowerShell has no 
 
 - This repository has no automated test suite. Run `npm run build` for client build validation; use the browser-control skill for safe, user-visible workflow checks.
 - Editing server files restarts the API (`node --watch`); wait for "API listening" before checking API behavior.
-- Preserve key flows: register/login, create tasks of all four frequencies, edit after snooze or missed (no stale "snoozed until" or "missed occurrence"), repeated 30-minute snoozes, complete, delete history/notifications/archived tasks.
+- Preserve key flows: register/login, create tasks of all four frequencies, edit after snooze or missed (no stale "snoozed until" or "missed occurrence"), repeated 30-minute snoozes, complete, clear history and notifications, and delete individual history/notifications/archived tasks.
 
 ## Pitfalls
 
 - Editing a task must supersede open occurrences and clear snoozes (previous bugs: stale snooze time and ghost missed occurrences).
 - Monthly day 31 clamps to the month's last day and creates a schedule-adjustment notification. Yearly Feb 29 is rejected.
-- Clean up any test data or scratch scripts you create (do not leave test users in the database).
+- Clean up test data through the UI when safe. Do not permanently delete account data unless explicitly authorized; if the UI cannot remove a disposable test account or remaining data, disclose it. Never clean up through direct database access.

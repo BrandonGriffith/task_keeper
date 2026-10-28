@@ -49,7 +49,7 @@ Additional scheduling behavior:
 - Users can create, edit, complete, snooze, archive, and restore tasks.
 - Editing a task supersedes already-due open occurrences, clears their snoozes, and replaces future occurrences for the old schedule while preserving completed history.
 - Archiving hides a task from the active list without deleting its occurrences or history. Archived tasks can be permanently deleted, along with their occurrences, linked notifications, and pending notification deliveries.
-- Individual history entries and in-app notifications can be deleted from their respective views. Deleting a history entry also deletes notifications and pending deliveries linked to that occurrence.
+- Individual history entries and in-app notifications can be deleted from their respective views, and each view can be cleared in full. Clearing history also deletes notifications and pending deliveries linked to those occurrences; clearing notifications removes all of the user's notifications and pending deliveries.
 
 ### Occurrences, missed work, and history
 
@@ -208,6 +208,7 @@ All endpoints use the `/api` prefix and return JSON except where noted. In devel
 | `DELETE` | `/api/tasks/:id/permanent` | Permanently deletes an archived task and its related records |
 | `POST` | `/api/tasks/:id/restore` | Restores an archived task |
 | `GET` | `/api/tasks/history?limit=100&offset=0` | Lists occurrence history; limit is 1–200 |
+| `DELETE` | `/api/tasks/history` | Clears all history occurrences and their linked notifications and pending deliveries |
 | `DELETE` | `/api/tasks/history/:id` | Deletes a history occurrence and its linked notifications |
 | `POST` | `/api/tasks/occurrences/:id/complete` | Completes an open occurrence |
 | `POST` | `/api/tasks/occurrences/:id/snooze` | Snoozes an open occurrence for 30 minutes |
@@ -217,6 +218,7 @@ All endpoints use the `/api` prefix and return JSON except where noted. In devel
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/api/notifications` | Lists the most recent 100 in-app notifications |
+| `DELETE` | `/api/notifications` | Clears all in-app notifications and their pending channel deliveries |
 | `PATCH` | `/api/notifications/:id/read` | Marks a notification as read |
 | `DELETE` | `/api/notifications/:id` | Deletes a notification and its pending channel deliveries |
 | `GET` | `/api/settings/notifications` | Reads preferences and channel availability |

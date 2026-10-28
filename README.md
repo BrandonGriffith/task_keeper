@@ -61,6 +61,7 @@ The repository-shared [task_keeper control skill](./.github/skills/task-keeper-c
 - In-app reminders appear in the Notifications view and as a toast while signed in (checked every 15 seconds). The browser tab title shows the unread notification count. After permission is granted, native browser alerts appear for due-task reminders while task_keeper is open; this does not require VAPID keys. Background Web Push and email delivery are server-side integrations and their settings are not exposed in the current UI.
 - MongoDB-backed notification delivery outbox with retries for email and browser push.
 - Permanent deletion of archived tasks, history entries, and notifications.
+- Clear history removes all completed/missed entries and their linked notifications and pending deliveries; clear notifications removes all notifications and their pending channel deliveries.
 - Responsive layout with dark mode as the default for new visitors and a saved light/dark theme switch on the sign-in, sign-up, and signed-in pages.
 
 ## Environment variables

@@ -593,6 +593,11 @@ h3,
   font-size: 0.79rem;
 }
 
+.clear-all-button {
+  flex: 0 0 auto;
+  margin-bottom: 3px;
+}
+
 .task-list {
   display: grid;
   gap: 13px;
@@ -1371,6 +1376,11 @@ h3,
   }
 
   .archive-toggle {
+    margin: 0;
+  }
+
+  .clear-all-button {
+    align-self: flex-start;
     margin: 0;
   }
 }

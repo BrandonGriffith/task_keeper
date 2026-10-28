@@ -78,6 +78,21 @@ router.get('/notifications', async (request, response) => {
   });
 });
 
+router.delete('/notifications', async (request, response) => {
+  const database = getDatabase();
+  await withMongoTransaction(async (session) => {
+    await database.collection('notificationDeliveries').deleteMany(
+      { userId: request.user.id },
+      { session },
+    );
+    await database.collection('notifications').deleteMany(
+      { userId: request.user.id },
+      { session },
+    );
+  });
+  return response.status(204).end();
+});
+
 router.patch('/notifications/:id/read', async (request, response) => {
   const notifications = getDatabase().collection('notifications');
   const now = new Date();

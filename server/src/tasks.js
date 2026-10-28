@@ -265,6 +265,28 @@ router.patch('/:id', async (request, response) => {
   return response.json({ task: toApiTask(task) });
 });
 
+router.delete('/history', async (request, response) => {
+  const database = getDatabase();
+  const historyFilter = {
+    userId: request.user.id,
+    status: { $in: ['completed', 'missed'] },
+  };
+  await withMongoTransaction(async (session) => {
+    const history = await database.collection('occurrences').find(
+      historyFilter,
+      { projection: { _id: 1 }, session },
+    ).toArray();
+    await deleteOccurrenceNotifications(
+      database,
+      request.user.id,
+      history.map((occurrence) => occurrence._id),
+      session,
+    );
+    await database.collection('occurrences').deleteMany(historyFilter, { session });
+  });
+  return response.status(204).end();
+});
+
 router.delete('/:id', async (request, response) => {
   const task = await ownedTask(request.user.id, request.params.id);
   if (!task.archived) {
