@@ -315,6 +315,8 @@ Create a private `.env` file in the project root; `.env` is local configuration 
 
 The frontend runs at `http://localhost:5173` and the API at `http://localhost:3001`.
 
+The API begins listening before connecting to MongoDB and retries an unavailable database connection every five seconds. This keeps the local app available when Wi-Fi or internet access drops, but account and task operations still require the MongoDB database and resume when it is reachable again.
+
 For a single-process production deployment:
 
 ```powershell

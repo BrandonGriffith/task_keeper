@@ -1403,6 +1403,32 @@ h3,
   }
 
   .history-item {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: 30px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "icon main main"
+      "icon status delete";
+    gap: 7px 10px;
     padding: 13px 11px;
+  }
+
+  .history-icon {
+    grid-area: icon;
+  }
+
+  .history-main {
+    grid-area: main;
+  }
+
+  .history-status {
+    grid-area: status;
+    justify-self: end;
+  }
+
+  .history-delete {
+    grid-area: delete;
+    justify-self: end;
+    margin-left: 0;
   }
 }
