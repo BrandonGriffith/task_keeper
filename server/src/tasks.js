@@ -97,7 +97,7 @@ async function deleteOccurrenceNotifications(database, userId, occurrenceIds, se
   if (!notificationIds.length) return;
 
   await database.collection('notificationDeliveries').deleteMany(
-    { notificationId: { $in: notificationIds } },
+    { userId, notificationId: { $in: notificationIds } },
     { session },
   );
   await notifications.deleteMany({ _id: { $in: notificationIds }, userId }, { session });
