@@ -110,6 +110,7 @@ async function insertOccurrence(task, dueAt, dateAdjusted, session) {
     taskId: task._id,
     userId: task.userId,
     taskTitle: task.title,
+    timezone: task.timezone,
     dueAt,
     status: 'pending',
     dateAdjusted,
@@ -355,7 +356,7 @@ router.get('/history', async (request, response) => {
   const timezones = new Map(tasks.map((task) => [task._id, task.timezone]));
   return response.json({
     occurrences: occurrences.map((occurrence) => (
-      toApiOccurrence(occurrence, timezones.get(occurrence.taskId))
+      toApiOccurrence(occurrence, occurrence.timezone ?? timezones.get(occurrence.taskId))
     )),
     nextOffset: occurrences.length === parsedLimit ? parsedOffset + occurrences.length : null,
   });

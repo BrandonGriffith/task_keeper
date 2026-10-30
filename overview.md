@@ -53,7 +53,7 @@ Additional scheduling behavior:
 
 ### Occurrences, missed work, and history
 
-A task is the recurring schedule; an occurrence is one scheduled instance. Occurrence documents keep a snapshot of the task title and due instant, plus lifecycle state, snooze state, and reminder timestamps.
+A task is the recurring schedule; an occurrence is one scheduled instance. Occurrence documents keep snapshots of the task title, timezone, and due instant, plus lifecycle state, snooze state, and reminder timestamps. History uses the timezone saved with each occurrence so editing a task's timezone does not change how earlier dates are displayed.
 
 - New occurrences start as `pending`.
 - When a due time passes without completion or an active snooze, the scheduler marks the occurrence `missed`, records `missedAt`, and creates a reminder. A pending occurrence already snoozed is skipped until the snooze expires.

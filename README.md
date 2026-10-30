@@ -67,6 +67,7 @@ The repository-shared [task_keeper control skill](./.github/skills/task-keeper-c
 - Per-user tasks with title, notes, local due time, and IANA timezone.
 - Daily, weekly, monthly, and yearly recurrence.
 - Timezone-aware scheduling that retains the local due hour across daylight-saving time changes.
+- History keeps each occurrence's original timezone when a task's schedule is edited.
 - Monthly dates that do not occur in a month (for example, the 31st in February) shift to that month's last day and create a schedule-adjustment notification.
 - Yearly tasks reject February 29 and invalid calendar dates.
 - Completion, 30-minute snoozes, missed occurrences, repeat reminders every 10 minutes while a missed occurrence remains open (pausing during snooze), paginated history, archive, and restore.

@@ -39,6 +39,7 @@ async function insertOccurrence(task, dueAt, dateAdjusted, session) {
     taskId: task._id,
     userId: task.userId,
     taskTitle: task.title,
+    timezone: task.timezone,
     dueAt,
     status: 'pending',
     dateAdjusted,
