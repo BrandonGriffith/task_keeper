@@ -13,8 +13,11 @@ A personal recurring-task manager (daily, weekly, monthly, yearly) with missed-t
 | Install | `npm install` |
 | Run everything (API :3001 + web :5173) | `npm run dev` |
 | Production build | `npm run build` |
+| Run production server (after build, with `NODE_ENV=production`) | `npm start` |
 
 On Windows PowerShell, use `npm.cmd` if `npm.ps1` is blocked. PowerShell has no `&&`; chain with `;`.
+
+For production, build the client first, set `NODE_ENV=production` in the server environment, then run `npm start`. Express serves the frontend from the Git-ignored repository-root `build/` folder when present. Generate this folder on the deployment host or include it as a build artifact. See [README.md](./README.md) for platform-specific commands and deployment requirements.
 
 ## Before you start
 

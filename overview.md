@@ -319,14 +319,15 @@ The frontend runs at `http://localhost:5173` and the API at `http://localhost:30
 
 The API begins listening before connecting to MongoDB and retries an unavailable database connection every five seconds. This keeps the local app available when Wi-Fi or internet access drops, but account and task operations still require the MongoDB database and resume when it is reachable again.
 
-For a single-process production deployment:
+For a single-process production deployment, build the client, then start Express with `NODE_ENV=production`:
 
 ```powershell
 npm run build
+$env:NODE_ENV = 'production'
 npm start
 ```
 
-Express serves the production client from `client/dist` when the build exists. Production deployments should use HTTPS, persistent MongoDB Atlas, restricted network access, a secret manager for credentials, backups, and monitoring for the API and scheduler.
+The production client is built into the repository-root `build/` folder, which Express serves with the API on the configured `PORT` (default `3001`) when the build exists. This folder is ignored by Git and must be generated with `npm run build` on the deployment host or included as a deployment artifact alongside the server. Provide `MONGODB_URI` and `JWT_SECRET` through the server environment or a secret manager. Production deployments should use HTTPS, persistent MongoDB Atlas, restricted network access, backups, and monitoring for the API and scheduler.
 
 ## Scripts
 
@@ -335,7 +336,7 @@ Run from the repository root:
 | Command | Effect |
 | --- | --- |
 | `npm run dev` | Starts the API in Node watch mode and the Vite development server |
-| `npm run build` | Builds the React client into `client/dist` |
+| `npm run build` | Builds the React client into the repository-root `build/` folder |
 | `npm start` | Starts the API, MongoDB client, and reminder scheduler |
 
 This repository currently has no automated test suite. Use `npm run build` for client build validation and the browser-control skill for safe, user-visible workflow checks. Verify API behavior with the running app when the change affects server routes or scheduling.

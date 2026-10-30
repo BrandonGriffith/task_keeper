@@ -21,7 +21,7 @@ Keep `.env` private and out of source control. Do not paste database credentials
 
 The API creates the required MongoDB collections and indexes at startup. Atlas may create the database and collections on first write.
 
-## Install and run
+## Run in development
 
 ```powershell
 npm install
@@ -34,14 +34,26 @@ The local servers start even when MongoDB Atlas cannot be reached and retry the 
 
 When switching from WSL to Windows in the same checkout, stop the WSL dev server and run `switch-to-windows.cmd` from the repository root. It removes the workspace links created by WSL and reinstalls Windows-native dependencies. Do not run Windows and WSL installs against the same `node_modules` at the same time.
 
-To build the client and serve the production build through Express:
+## Build and run in production
+
+Build the client from the repository root, then start the Express server. When `build/` exists, Express serves both the built frontend and API from the same port (default `3001`).
+
+Windows PowerShell:
 
 ```powershell
-npm run build
-npm start
+npm.cmd run build
+$env:NODE_ENV = 'production'
+npm.cmd start
 ```
 
-The server serves `client/dist` if the production build exists.
+Linux/macOS:
+
+```sh
+npm run build
+NODE_ENV=production npm start
+```
+
+The client build is written to the repository-root `build/` folder, which is ignored by Git. Generate it in the deployment pipeline or deploy it as a build artifact alongside the server; a source checkout by itself does not include the build. Configure `MONGODB_URI` and `JWT_SECRET` through the server environment or a secret manager. Serve the app over HTTPS so production session cookies work securely.
 
 ## Working with AI agents
 

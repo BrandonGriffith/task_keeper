@@ -10,7 +10,7 @@ import notificationsRouter from './notifications.js';
 import tasksRouter from './tasks.js';
 
 const app = express();
-const clientDist = resolve(fileURLToPath(new URL('../../client/dist/', import.meta.url)));
+const clientDist = resolve(fileURLToPath(new URL('../../build/', import.meta.url)));
 
 app.disable('x-powered-by');
 app.use((_request, response, next) => {
