@@ -64,6 +64,7 @@ The repository-shared [task_keeper control skill](./.github/skills/task-keeper-c
 ## Features
 
 - User registration and login with bcrypt password hashes, signed HTTP-only JWT cookies, and rate-limited authentication endpoints.
+- Optional Redis-backed shared rate limits for registration and login across API instances; without Redis, rate limits remain in process memory.
 - Per-user tasks with title, notes, local due time, and IANA timezone.
 - Daily, weekly, monthly, and yearly recurrence.
 - Timezone-aware scheduling that retains the local due hour across daylight-saving time changes.
@@ -95,6 +96,7 @@ General:
 | `PORT` | `3001` | API listen port. |
 | `NODE_ENV` | unset | Set to `production` to enable secure-only session cookies. |
 | `ENV_FILE` | project `.env` | Optional path to the environment file. |
+| `REDIS_URL` | unset | Optional Redis connection URL for shared authentication rate limits. |
 
 Optional email settings: `EMAIL_SMTP_HOST`, `EMAIL_SMTP_PORT`, `EMAIL_SMTP_SECURE`, `EMAIL_SMTP_USER`, `EMAIL_SMTP_PASSWORD`, and `EMAIL_FROM`.
 

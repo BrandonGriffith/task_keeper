@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import app from './app.js';
 import { assertRuntimeConfig } from './config.js';
 import { closeDatabase, connectToDatabase } from './db.js';
+import { closeRedis, connectToRedis } from './redis.js';
 import { startScheduler, stopScheduler } from './scheduler.js';
 
 assertRuntimeConfig();
@@ -11,6 +12,7 @@ const server = createServer(app);
 const databaseRetryDelayMs = 5_000;
 let shutdownRequested = false;
 let connectionAttempt;
+let redisConnectionAttempt;
 
 async function connectToDatabaseWithRetry() {
   while (!shutdownRequested) {
@@ -32,6 +34,7 @@ async function connectToDatabaseWithRetry() {
 
 server.listen(port, () => {
   console.log(`task_keeper API listening on http://localhost:${port}`);
+  redisConnectionAttempt = connectToRedis();
   void connectToDatabaseWithRetry();
 });
 
@@ -47,6 +50,8 @@ async function shutdown(signal) {
     if (connectionAttempt) {
       await connectionAttempt.catch(() => {});
     }
+    await closeRedis();
+    if (redisConnectionAttempt) await redisConnectionAttempt;
     await closeDatabase();
   });
 }

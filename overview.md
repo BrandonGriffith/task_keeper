@@ -4,12 +4,13 @@
 
 `task_keeper` is a personal-first recurring-task manager. It helps people keep daily, weekly, monthly, and yearly routines in view, records whether individual scheduled occurrences were completed or missed, and creates reminders when an occurrence becomes due.
 
-The application is written in JavaScript and Node.js. It consists of a React browser client, an Express API, and MongoDB persistence. The API process also runs the background scheduler that creates occurrences and dispatches notifications.
+The application is written in JavaScript and Node.js. It consists of a React browser client, an Express API, MongoDB persistence, and optional Redis-backed authentication rate limiting. The API process also runs the background scheduler that creates occurrences and dispatches notifications.
 
 ## Current technology and requirements
 
 - Node.js 20.19 or newer and npm.
 - A MongoDB replica set, either MongoDB Atlas or a local replica-set deployment. The application uses multi-document transactions.
+- Redis is optional; when configured it shares authentication rate limits across API instances.
 - React 19 and Vite 6 for the browser client.
 - Express 5 for the API.
 - MongoDB Node.js driver 7 for persistence.
@@ -24,7 +25,7 @@ MongoDB driver 7 requires Node.js 20.19 or later. A standalone local `mongod` is
 - Email addresses are trimmed and normalized to lowercase.
 - Passwords must contain 10–128 characters and are stored as bcrypt hashes.
 - Authentication uses a signed JSON Web Token in an HTTP-only cookie. The cookie is `SameSite=Lax`, valid for seven days, and marked `Secure` in production.
-- Registration and login are limited to 10 requests per minute.
+- Registration and login are limited to 10 requests per minute per client IP as reported by Express. `REDIS_URL` enables a shared Redis store across API instances; if Redis is unavailable, the limiter falls back to process-local memory.
 - Authenticated user-data access is scoped to the current user ID; system-wide scheduler operations use separate coordination records.
 - Each user document stores their in-app, system-push, and email notification preferences.
 
@@ -103,6 +104,7 @@ The root package uses npm workspaces to coordinate the client and server:
 │   │   ├── index.js
 │   │   ├── notifications.js
 │   │   ├── recurrence.js
+│   │   ├── redis.js
 │   │   ├── scheduler.js
 │   │   ├── tasks.js
 │   │   └── validation.js
@@ -143,6 +145,7 @@ The root package uses npm workspaces to coordinate the client and server:
 - `server/src/app.js` configures Express, JSON parsing, cookies, the database health check, API routers, and production static-file serving.
 - `server/src/auth.js` implements registration/login/logout/session lookup, password hashing, signed cookies, authentication middleware, and rate limiting.
 - `server/src/db.js` owns the MongoDB client lifecycle, selected database, and startup index creation.
+- `server/src/redis.js` owns the optional Redis client lifecycle and shared authentication rate-limit store, with a process-local fallback.
 - `server/src/tasks.js` implements task/occurrence APIs, response mapping, user ownership checks, and lifecycle updates.
 - `server/src/recurrence.js` calculates timezone-aware first and subsequent occurrences.
 - `server/src/scheduler.js` fills the occurrence schedule, creates initial, snooze-expiry, and 10-minute repeat reminders for open missed occurrences, and processes email/push delivery documents.
@@ -257,6 +260,8 @@ The root `package-lock.json` captures exact resolutions. Versions below are the 
 | `server` | `jsonwebtoken` | 9.0.3 | Session JWT signing and verification |
 | `server` | `cookie-parser` | 1.4.7 | Reads the session cookie |
 | `server` | `express-rate-limit` | 7.5.1 | Limits account registration and login rates |
+| `server` | `redis` | 6.3.1 | Optional Redis client for shared rate limits |
+| `server` | `rate-limit-redis` | 4.3.1 | Redis store for authentication rate limits |
 | `server` | `zod` | 4.6.7 | API input validation |
 | `server` | `dotenv` | 16.6.1 | Loads local environment variables |
 | `server` | `nodemailer` | 10.2.1 | SMTP email delivery |
@@ -268,7 +273,7 @@ The root `package-lock.json` captures exact resolutions. Versions below are the 
 | --- | --- | ---: | --- |
 | root | `concurrently` | 9.2.5 | Runs the frontend and API dev processes together |
 
-The client uses CSS and standard browser APIs. The server and client also use Node.js/browser built-ins without additional packages, including HTTP, cryptography through dependency APIs, `Intl.DateTimeFormat`, service workers, notifications, and push subscriptions.
+The client uses CSS and standard browser APIs. Both workspaces also rely on platform APIs such as HTTP, `Intl.DateTimeFormat`, service workers, notifications, and push subscriptions.
 
 ## Configuration
 
@@ -290,6 +295,7 @@ Create a private `.env` file in the project root; `.env` is local configuration 
 | `PORT` | `3001` | API port |
 | `NODE_ENV` | unset | `production` enables secure-only session cookies |
 | `ENV_FILE` | project `.env` | Optional environment file location |
+| `REDIS_URL` | unset | Optional Redis connection URL for shared authentication rate limits |
 
 ### Optional email settings
 

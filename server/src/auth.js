@@ -6,6 +6,7 @@ import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
 import { getDatabase } from './db.js';
 import { HttpError } from './errors.js';
+import { createAuthRateLimitStore } from './redis.js';
 
 const router = Router();
 const credentials = z.object({
@@ -32,6 +33,7 @@ const authLimiter = rateLimit({
   limit: 10,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
+  store: createAuthRateLimitStore(),
 });
 
 router.post('/register', authLimiter, async (request, response) => {

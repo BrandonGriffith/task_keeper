@@ -4,7 +4,7 @@ Guidance for AI coding agents (Codex, Copilot, Claude, etc.) working on task_kee
 
 ## What this is
 
-A personal recurring-task manager (daily, weekly, monthly, yearly) with missed-task reminders. JavaScript only: React 19 + Vite client, Express 5 API, MongoDB Atlas, npm workspaces (`client`, `server`).
+A personal recurring-task manager (daily, weekly, monthly, yearly) with missed-task reminders. JavaScript only: React 19 + Vite client, Express 5 API, MongoDB Atlas, optional Redis for shared authentication rate limits, npm workspaces (`client`, `server`).
 
 ## Commands (run from the repo root)
 
