@@ -4,6 +4,7 @@ import webPush from 'web-push';
 import { emailConfigured, pushConfigured } from './config.js';
 import { getDatabase, withMongoTransaction } from './db.js';
 import { nextOccurrence, occurrenceDateAdjusted } from './recurrence.js';
+import { invalidateUserReadCache } from './redis.js';
 
 const intervalMs = 15_000;
 const missedReminderRepeatMs = 10 * 60 * 1000;
@@ -93,7 +94,7 @@ async function insertScheduleAdjustment(task, occurrence, created, session) {
   );
 }
 
-async function createUpcomingOccurrences() {
+async function createUpcomingOccurrences(changedUserIds) {
   const database = getDatabase();
   const tasks = await database.collection('tasks')
     .find({ archived: false })
@@ -111,12 +112,12 @@ async function createUpcomingOccurrences() {
     });
     if (future) continue;
 
-    await withMongoTransaction(async (session) => {
+    const changed = await withMongoTransaction(async (session) => {
       const currentTask = await database.collection('tasks').findOne(
         { _id: task._id, archived: false, nextDueAt: task.nextDueAt },
         { session },
       );
-      if (!currentTask) return;
+      if (!currentTask) return false;
       const future = await occurrences.findOne(
         {
           taskId: currentTask._id,
@@ -125,7 +126,7 @@ async function createUpcomingOccurrences() {
         },
         { session },
       );
-      if (future) return;
+      if (future) return false;
 
       const config = taskSchedule(currentTask);
       let scheduledAt = currentTask.nextDueAt;
@@ -152,7 +153,9 @@ async function createUpcomingOccurrences() {
         { $set: { nextDueAt: scheduledAt, updatedAt: new Date() } },
         { session },
       );
+      return true;
     });
+    if (changed) changedUserIds.add(task.userId);
   }
 }
 
@@ -246,7 +249,7 @@ async function insertReminder(occurrence, task, user, session, { repeated = fals
   }
 }
 
-async function createDueReminders() {
+async function createDueReminders(changedUserIds) {
   const database = getDatabase();
   const occurrences = database.collection('occurrences');
   const due = await occurrences.find({
@@ -259,13 +262,13 @@ async function createDueReminders() {
   }).sort({ dueAt: 1 }).limit(100).toArray();
 
   for (const occurrence of due) {
-    await withMongoTransaction(async (session) => {
+    const changed = await withMongoTransaction(async (session) => {
       const task = await database.collection('tasks').findOne({
         _id: occurrence.taskId,
         userId: occurrence.userId,
         archived: false,
       }, { session });
-      if (!task) return;
+      if (!task) return false;
       const now = new Date();
       const updated = await occurrences.findOneAndUpdate(
         {
@@ -278,13 +281,15 @@ async function createDueReminders() {
         { $set: { status: 'missed', missedAt: now, initialNotifiedAt: now } },
         { returnDocument: 'after', session },
       );
-      if (!updated) return;
+      if (!updated) return false;
       const user = await database.collection('users').findOne(
         { _id: occurrence.userId },
         { session },
       );
       await insertReminder(updated, task, user, session);
+      return true;
     });
+    if (changed) changedUserIds.add(occurrence.userId);
   }
 
   const snoozed = await occurrences.find({
@@ -293,13 +298,13 @@ async function createDueReminders() {
     snoozedUntil: { $lte: new Date() },
   }).sort({ snoozedUntil: 1 }).limit(100).toArray();
   for (const occurrence of snoozed) {
-    await withMongoTransaction(async (session) => {
+    const changed = await withMongoTransaction(async (session) => {
       const task = await database.collection('tasks').findOne({
         _id: occurrence.taskId,
         userId: occurrence.userId,
         archived: false,
       }, { session });
-      if (!task) return;
+      if (!task) return false;
       const now = new Date();
       const updated = await occurrences.findOneAndUpdate(
         {
@@ -318,13 +323,15 @@ async function createDueReminders() {
         },
         { returnDocument: 'after', session },
       );
-      if (!updated) return;
+      if (!updated) return false;
       const user = await database.collection('users').findOne(
         { _id: occurrence.userId },
         { session },
       );
       await insertReminder(updated, task, user, session);
+      return true;
     });
+    if (changed) changedUserIds.add(occurrence.userId);
   }
 
   const now = new Date();
@@ -344,7 +351,7 @@ async function createDueReminders() {
   }).sort({ lastReminderAt: 1, initialNotifiedAt: 1 }).limit(100).toArray();
 
   for (const occurrence of repeatable) {
-    await withMongoTransaction(async (session) => {
+    const changed = await withMongoTransaction(async (session) => {
       const current = await occurrences.findOne({
         _id: occurrence._id,
         status: 'missed',
@@ -359,19 +366,21 @@ async function createDueReminders() {
           },
         ],
       }, { session });
-      if (!current) return;
+      if (!current) return false;
       const task = await database.collection('tasks').findOne({
         _id: current.taskId,
         userId: current.userId,
         archived: false,
       }, { session });
-      if (!task) return;
+      if (!task) return false;
       const user = await database.collection('users').findOne(
         { _id: current.userId },
         { session },
       );
       await insertReminder(current, task, user, session, { repeated: true });
+      return true;
     });
+    if (changed) changedUserIds.add(occurrence.userId);
   }
 }
 
@@ -526,9 +535,11 @@ export async function runSchedulerTick() {
   }, schedulerLeaseMs / 3);
   heartbeat.unref();
   try {
-    await createUpcomingOccurrences();
-    await createDueReminders();
+    const changedUserIds = new Set();
+    await createUpcomingOccurrences(changedUserIds);
+    await createDueReminders(changedUserIds);
     await processDeliveryOutbox();
+    await Promise.all([...changedUserIds].map((userId) => invalidateUserReadCache(userId)));
     return true;
   } finally {
     clearInterval(heartbeat);

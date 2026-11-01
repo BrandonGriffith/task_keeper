@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { getDatabase, withMongoTransaction } from './db.js';
 import { HttpError } from './errors.js';
 import { firstOccurrence, nextOccurrence } from './recurrence.js';
+import { getCachedJsonResponse, invalidateUserReadCache } from './redis.js';
 import { ensureNextOpenOccurrence } from './scheduler.js';
 import { parseTaskInput } from './validation.js';
 
@@ -226,43 +227,52 @@ async function saveTask(userId, taskId, input) {
 }
 
 router.get('/', async (request, response) => {
-  const database = getDatabase();
   const archived = request.query.archived === 'true';
-  const tasks = await database.collection('tasks')
-    .find({ userId: request.user.id, archived })
-    .sort({ nextDueAt: 1, createdAt: 1 })
-    .toArray();
-  if (!tasks.length) return response.json({ tasks: [] });
+  const result = await getCachedJsonResponse(
+    request.user.id,
+    `tasks:${archived ? 'archived' : 'active'}`,
+    async () => {
+      const database = getDatabase();
+      const tasks = await database.collection('tasks')
+        .find({ userId: request.user.id, archived })
+        .sort({ nextDueAt: 1, createdAt: 1 })
+        .toArray();
+      if (!tasks.length) return { tasks: [] };
 
-  const occurrences = await database.collection('occurrences')
-    .find({
-      userId: request.user.id,
-      taskId: { $in: tasks.map((task) => task._id) },
-      status: { $in: ['pending', 'missed'] },
-      supersededAt: { $exists: false },
-    })
-    .sort({ dueAt: 1 })
-    .toArray();
-  const nextByTask = new Map();
-  for (const occurrence of occurrences) {
-    if (!nextByTask.has(occurrence.taskId)) nextByTask.set(occurrence.taskId, occurrence);
-  }
-  return response.json({
-    tasks: tasks
-      .map((task) => toApiTask(task, nextByTask.get(task._id)))
-      .sort((left, right) => new Date(left.due_at ?? left.next_due_at) - new Date(right.due_at ?? right.next_due_at)),
-  });
+      const occurrences = await database.collection('occurrences')
+        .find({
+          userId: request.user.id,
+          taskId: { $in: tasks.map((task) => task._id) },
+          status: { $in: ['pending', 'missed'] },
+          supersededAt: { $exists: false },
+        })
+        .sort({ dueAt: 1 })
+        .toArray();
+      const nextByTask = new Map();
+      for (const occurrence of occurrences) {
+        if (!nextByTask.has(occurrence.taskId)) nextByTask.set(occurrence.taskId, occurrence);
+      }
+      return {
+        tasks: tasks
+          .map((task) => toApiTask(task, nextByTask.get(task._id)))
+          .sort((left, right) => new Date(left.due_at ?? left.next_due_at) - new Date(right.due_at ?? right.next_due_at)),
+      };
+    },
+  );
+  return response.json(result);
 });
 
 router.post('/', async (request, response) => {
   const input = parseTaskInput(request.body);
   const task = await saveTask(request.user.id, null, input);
+  await invalidateUserReadCache(request.user.id);
   return response.status(201).json({ task: toApiTask(task) });
 });
 
 router.patch('/:id', async (request, response) => {
   const input = parseTaskInput(request.body);
   const task = await saveTask(request.user.id, request.params.id, input);
+  await invalidateUserReadCache(request.user.id);
   return response.json({ task: toApiTask(task) });
 });
 
@@ -285,6 +295,7 @@ router.delete('/history', async (request, response) => {
     );
     await database.collection('occurrences').deleteMany(historyFilter, { session });
   });
+  await invalidateUserReadCache(request.user.id);
   return response.status(204).end();
 });
 
@@ -296,6 +307,7 @@ router.delete('/:id', async (request, response) => {
       { $set: { archived: true, updatedAt: new Date() } },
     );
   }
+  await invalidateUserReadCache(request.user.id);
   return response.status(204).end();
 });
 
@@ -318,6 +330,7 @@ router.delete('/:id/permanent', async (request, response) => {
       { session },
     );
   });
+  await invalidateUserReadCache(request.user.id);
   return response.status(204).end();
 });
 
@@ -329,6 +342,7 @@ router.post('/:id/restore', async (request, response) => {
       { $set: { archived: false, updatedAt: new Date() } },
     );
   }
+  await invalidateUserReadCache(request.user.id);
   return response.status(204).end();
 });
 
@@ -342,24 +356,31 @@ router.get('/history', async (request, response) => {
     throw new HttpError(400, 'History offset must be a non-negative integer');
   }
 
-  const database = getDatabase();
-  const occurrences = await database.collection('occurrences')
-    .find({ userId: request.user.id, status: { $in: ['completed', 'missed'] } })
-    .sort({ dueAt: -1, _id: -1 })
-    .skip(parsedOffset)
-    .limit(parsedLimit)
-    .toArray();
-  const taskIds = [...new Set(occurrences.map((occurrence) => occurrence.taskId))];
-  const tasks = await database.collection('tasks')
-    .find({ _id: { $in: taskIds }, userId: request.user.id }, { projection: { _id: 1, timezone: 1 } })
-    .toArray();
-  const timezones = new Map(tasks.map((task) => [task._id, task.timezone]));
-  return response.json({
-    occurrences: occurrences.map((occurrence) => (
-      toApiOccurrence(occurrence, occurrence.timezone ?? timezones.get(occurrence.taskId))
-    )),
-    nextOffset: occurrences.length === parsedLimit ? parsedOffset + occurrences.length : null,
-  });
+  const result = await getCachedJsonResponse(
+    request.user.id,
+    `history:${parsedLimit}:${parsedOffset}`,
+    async () => {
+      const database = getDatabase();
+      const occurrences = await database.collection('occurrences')
+        .find({ userId: request.user.id, status: { $in: ['completed', 'missed'] } })
+        .sort({ dueAt: -1, _id: -1 })
+        .skip(parsedOffset)
+        .limit(parsedLimit)
+        .toArray();
+      const taskIds = [...new Set(occurrences.map((occurrence) => occurrence.taskId))];
+      const tasks = await database.collection('tasks')
+        .find({ _id: { $in: taskIds }, userId: request.user.id }, { projection: { _id: 1, timezone: 1 } })
+        .toArray();
+      const timezones = new Map(tasks.map((task) => [task._id, task.timezone]));
+      return {
+        occurrences: occurrences.map((occurrence) => (
+          toApiOccurrence(occurrence, occurrence.timezone ?? timezones.get(occurrence.taskId))
+        )),
+        nextOffset: occurrences.length === parsedLimit ? parsedOffset + occurrences.length : null,
+      };
+    },
+  );
+  return response.json(result);
 });
 
 router.delete('/history/:id', async (request, response) => {
@@ -381,6 +402,7 @@ router.delete('/history/:id', async (request, response) => {
       { session },
     );
   });
+  await invalidateUserReadCache(request.user.id);
   return response.status(204).end();
 });
 
@@ -407,6 +429,7 @@ router.post('/occurrences/:id/complete', async (request, response) => {
     if (task) await ensureNextOpenOccurrence(task, session);
     return occurrence;
   });
+  await invalidateUserReadCache(request.user.id);
   return response.json({
     occurrence: {
       id: updated._id,
@@ -441,6 +464,7 @@ router.post('/occurrences/:id/snooze', async (request, response) => {
     { returnDocument: 'after' },
   );
   if (!updated) throw new HttpError(404, 'Open task occurrence not found');
+  await invalidateUserReadCache(request.user.id);
   return response.json({
     occurrence: { id: request.params.id, snoozed_until: updated.snoozedUntil },
   });

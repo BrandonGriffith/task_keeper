@@ -72,7 +72,12 @@ router.post('/login', authLimiter, async (request, response) => {
 });
 
 router.post('/logout', (_request, response) => {
-  response.clearCookie('task_keeper_session', { httpOnly: true, sameSite: 'lax', path: '/' });
+  response.clearCookie('task_keeper_session', {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+  });
   return response.status(204).end();
 });
 

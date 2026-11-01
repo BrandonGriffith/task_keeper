@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { emailConfigured, pushConfigured } from './config.js';
 import { getDatabase, withMongoTransaction } from './db.js';
 import { HttpError } from './errors.js';
+import { getCachedJsonResponse, invalidateUserReadCache } from './redis.js';
 
 const router = Router();
 const settingsSchema = z.object({
@@ -52,30 +53,33 @@ function toApiPreferences(preferences = {}) {
 }
 
 router.get('/notifications', async (request, response) => {
-  const database = getDatabase();
-  const user = await database.collection('users').findOne(
-    { _id: request.user.id },
-    { projection: { 'notificationPreferences.inAppEnabled': 1 } },
-  );
-  const enabled = user?.notificationPreferences?.inAppEnabled ?? true;
-  const notifications = enabled
-    ? await database.collection('notifications')
-      .find({ userId: request.user.id })
-      .sort({ createdAt: -1 })
-      .limit(100)
-      .toArray()
-    : [];
-  return response.json({
-    notifications: notifications.map((notification) => ({
-      id: notification._id,
-      occurrence_id: notification.occurrenceId ?? notification.sourceOccurrenceId ?? null,
-      kind: notification.kind,
-      title: notification.title,
-      body: notification.body,
-      read_at: notification.readAt ?? null,
-      created_at: notification.createdAt,
-    })),
+  const result = await getCachedJsonResponse(request.user.id, 'notifications', async () => {
+    const database = getDatabase();
+    const user = await database.collection('users').findOne(
+      { _id: request.user.id },
+      { projection: { 'notificationPreferences.inAppEnabled': 1 } },
+    );
+    const enabled = user?.notificationPreferences?.inAppEnabled ?? true;
+    const notifications = enabled
+      ? await database.collection('notifications')
+        .find({ userId: request.user.id })
+        .sort({ createdAt: -1 })
+        .limit(100)
+        .toArray()
+      : [];
+    return {
+      notifications: notifications.map((notification) => ({
+        id: notification._id,
+        occurrence_id: notification.occurrenceId ?? notification.sourceOccurrenceId ?? null,
+        kind: notification.kind,
+        title: notification.title,
+        body: notification.body,
+        read_at: notification.readAt ?? null,
+        created_at: notification.createdAt,
+      })),
+    };
   });
+  return response.json(result);
 });
 
 router.delete('/notifications', async (request, response) => {
@@ -90,6 +94,7 @@ router.delete('/notifications', async (request, response) => {
       { session },
     );
   });
+  await invalidateUserReadCache(request.user.id);
   return response.status(204).end();
 });
 
@@ -108,6 +113,7 @@ router.patch('/notifications/:id/read', async (request, response) => {
     });
   }
   if (!notification) throw new HttpError(404, 'Notification not found');
+  await invalidateUserReadCache(request.user.id);
   return response.json({
     notification: { id: request.params.id, read_at: notification.readAt },
   });
@@ -131,20 +137,24 @@ router.delete('/notifications/:id', async (request, response) => {
       { session },
     );
   });
+  await invalidateUserReadCache(request.user.id);
   return response.status(204).end();
 });
 
 router.get('/settings/notifications', async (request, response) => {
-  const user = await getDatabase().collection('users').findOne(
-    { _id: request.user.id },
-    { projection: { notificationPreferences: 1 } },
-  );
-  const preferences = toApiPreferences(user?.notificationPreferences);
-  return response.json({
-    preferences,
-    availability: { inApp: true, system: pushConfigured(), email: emailConfigured() },
-    publicKey: pushConfigured() ? process.env.VAPID_PUBLIC_KEY : null,
+  const result = await getCachedJsonResponse(request.user.id, 'notification-settings', async () => {
+    const user = await getDatabase().collection('users').findOne(
+      { _id: request.user.id },
+      { projection: { notificationPreferences: 1 } },
+    );
+    const preferences = toApiPreferences(user?.notificationPreferences);
+    return {
+      preferences,
+      availability: { inApp: true, system: pushConfigured(), email: emailConfigured() },
+      publicKey: pushConfigured() ? process.env.VAPID_PUBLIC_KEY : null,
+    };
   });
+  return response.json(result);
 });
 
 router.put('/settings/notifications', async (request, response) => {
@@ -159,6 +169,7 @@ router.put('/settings/notifications', async (request, response) => {
     { $set: { notificationPreferences: preferences } },
   );
   if (!result.matchedCount) throw new HttpError(404, 'User not found');
+  await invalidateUserReadCache(request.user.id);
   return response.json({ preferences: toApiPreferences(preferences) });
 });
 

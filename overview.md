@@ -4,13 +4,13 @@
 
 `task_keeper` is a personal-first recurring-task manager. It helps people keep daily, weekly, monthly, and yearly routines in view, records whether individual scheduled occurrences were completed or missed, and creates reminders when an occurrence becomes due.
 
-The application is written in JavaScript and Node.js. It consists of a React browser client, an Express API, MongoDB persistence, and optional Redis-backed authentication rate limiting. The API process also runs the background scheduler that creates occurrences and dispatches notifications.
+The application is written in JavaScript and Node.js. It consists of a React browser client, an Express API, MongoDB persistence, and optional Redis-backed authentication rate limiting and short-lived API read caching. The API process also runs the background scheduler that creates occurrences and dispatches notifications.
 
 ## Current technology and requirements
 
 - Node.js 20.19 or newer and npm.
 - A MongoDB replica set, either MongoDB Atlas or a local replica-set deployment. The application uses multi-document transactions.
-- Redis is optional; when configured it shares authentication rate limits across API instances.
+- Redis is optional; when configured it shares authentication rate limits across API instances and caches per-user task lists, history, notifications, and notification settings for up to 10 seconds.
 - React 19 and Vite 6 for the browser client.
 - Express 5 for the API.
 - MongoDB Node.js driver 7 for persistence.
@@ -26,6 +26,7 @@ MongoDB driver 7 requires Node.js 20.19 or later. A standalone local `mongod` is
 - Passwords must contain 10–128 characters and are stored as bcrypt hashes.
 - Authentication uses a signed JSON Web Token in an HTTP-only cookie. The cookie is `SameSite=Lax`, valid for seven days, and marked `Secure` in production.
 - Registration and login are limited to 10 requests per minute per client IP as reported by Express. `REDIS_URL` enables a shared Redis store across API instances; if Redis is unavailable, the limiter falls back to process-local memory.
+- Redis-backed API read caching is scoped by user ID, expires after 10 seconds, and is invalidated after task, history, notification, preference, and scheduler writes. If Redis is not configured or a cache read fails, requests read from MongoDB; if invalidation fails, the 10-second expiry bounds how long a cached response can remain stale. Caching is intended to reduce repeated database reads, not guarantee lower latency in every deployment.
 - Authenticated user-data access is scoped to the current user ID; system-wide scheduler operations use separate coordination records.
 - Each user document stores their in-app, system-push, and email notification preferences.
 
@@ -122,7 +123,7 @@ The root package uses npm workspaces to coordinate the client and server:
 ### Client
 
 - `client/src/App.jsx` implements account forms, task creation/editing, active/archived lists, task actions, history, notifications, and in-app/foreground browser reminder settings. Email and background push remain server-side integrations without UI controls.
-- `client/src/api.js` is the same-origin JSON API helper and converts a VAPID base64url key to the browser Push API's byte format.
+- `client/src/api.js` is the same-origin JSON API helper; it includes session cookies and normalizes network and server errors for the UI.
 - `client/src/main.jsx` mounts React.
 - `client/src/styles.css` contains the responsive application styling and light/dark color palettes.
 - Dark mode is the default when no browser theme preference is saved. The theme toggle appears at the bottom of the sign-in/sign-up screen and each signed-in page; the selection is saved in browser local storage (`theme`) and applied as `data-theme` on `<html>`.
@@ -141,11 +142,11 @@ The root package uses npm workspaces to coordinate the client and server:
 
 ### Server
 
-- `server/src/index.js` checks runtime configuration, connects to MongoDB before opening the HTTP listener, starts the scheduler, and closes the scheduler and database connection on shutdown.
+- `server/src/index.js` checks runtime configuration, opens the HTTP listener, retries the MongoDB connection until available, starts the scheduler after MongoDB connects, and closes services on shutdown.
 - `server/src/app.js` configures Express, JSON parsing, cookies, the database health check, API routers, and production static-file serving.
 - `server/src/auth.js` implements registration/login/logout/session lookup, password hashing, signed cookies, authentication middleware, and rate limiting.
 - `server/src/db.js` owns the MongoDB client lifecycle, selected database, and startup index creation.
-- `server/src/redis.js` owns the optional Redis client lifecycle and shared authentication rate-limit store, with a process-local fallback.
+- `server/src/redis.js` owns the optional Redis client lifecycle, shared authentication rate-limit store, and short-lived per-user read cache. Authentication limits fall back to process-local memory; cache failures bypass Redis and use MongoDB.
 - `server/src/tasks.js` implements task/occurrence APIs, response mapping, user ownership checks, and lifecycle updates.
 - `server/src/recurrence.js` calculates timezone-aware first and subsequent occurrences.
 - `server/src/scheduler.js` fills the occurrence schedule, creates initial, snooze-expiry, and 10-minute repeat reminders for open missed occurrences, and processes email/push delivery documents.
@@ -260,7 +261,7 @@ The root `package-lock.json` captures exact resolutions. Versions below are the 
 | `server` | `jsonwebtoken` | 9.0.3 | Session JWT signing and verification |
 | `server` | `cookie-parser` | 1.4.7 | Reads the session cookie |
 | `server` | `express-rate-limit` | 7.5.1 | Limits account registration and login rates |
-| `server` | `redis` | 6.3.1 | Optional Redis client for shared rate limits |
+| `server` | `redis` | 6.3.1 | Optional Redis client for shared rate limits and short-lived API read caching |
 | `server` | `rate-limit-redis` | 4.3.1 | Redis store for authentication rate limits |
 | `server` | `zod` | 4.6.7 | API input validation |
 | `server` | `dotenv` | 16.6.1 | Loads local environment variables |
@@ -295,7 +296,7 @@ Create a private `.env` file in the project root; `.env` is local configuration 
 | `PORT` | `3001` | API port |
 | `NODE_ENV` | unset | `production` enables secure-only session cookies |
 | `ENV_FILE` | project `.env` | Optional environment file location |
-| `REDIS_URL` | unset | Optional Redis connection URL for shared authentication rate limits |
+| `REDIS_URL` | unset | Optional Redis connection URL for shared authentication rate limits and short-lived API read caching |
 
 ### Optional email settings
 

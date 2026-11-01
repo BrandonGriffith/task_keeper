@@ -6,7 +6,17 @@ import './config.js';
 let client;
 let connectionPromise;
 let redisErrorReported = false;
+let cacheErrorReported = false;
 let redisCloseRequested = false;
+
+const responseCachePrefix = 'task_keeper:response:v1';
+const responseCacheTtlSeconds = 10;
+
+function reportCacheError(error) {
+  if (redisCloseRequested || cacheErrorReported) return;
+  cacheErrorReported = true;
+  console.error('Redis response cache failed; bypassing cached reads', error);
+}
 
 function getClient() {
   if (!client) {
@@ -18,6 +28,7 @@ function getClient() {
     });
     client.on('ready', () => {
       redisErrorReported = false;
+      cacheErrorReported = false;
       console.log('Redis connected');
     });
   }
@@ -111,4 +122,55 @@ class RedisRateLimitStore {
 
 export function createAuthRateLimitStore() {
   return process.env.REDIS_URL ? new RedisRateLimitStore() : undefined;
+}
+
+export async function getCachedJsonResponse(userId, responseKey, load) {
+  if (!process.env.REDIS_URL || !client?.isReady) return load();
+
+  const redis = client;
+  const userKey = encodeURIComponent(userId);
+  const versionKey = `${responseCachePrefix}:version:${userKey}`;
+  const cacheKey = `${responseCachePrefix}:user:${userKey}:response:${encodeURIComponent(responseKey)}`;
+  let version;
+  try {
+    const [currentVersion, cached] = await redis
+      .multi()
+      .get(versionKey)
+      .get(cacheKey)
+      .exec();
+    version = currentVersion ?? '0';
+    if (cached !== null) {
+      try {
+        const entry = JSON.parse(cached);
+        if (entry.version === version && Object.hasOwn(entry, 'response')) {
+          return entry.response;
+        }
+      } catch (error) {
+        reportCacheError(error);
+      }
+    }
+  } catch (error) {
+    reportCacheError(error);
+    return load();
+  }
+
+  const response = await load();
+  try {
+    const serialized = JSON.stringify({ version, response });
+    if (serialized !== undefined) {
+      await redis.set(cacheKey, serialized, { EX: responseCacheTtlSeconds });
+    }
+  } catch (error) {
+    reportCacheError(error);
+  }
+  return response;
+}
+
+export async function invalidateUserReadCache(userId) {
+  if (!process.env.REDIS_URL || !client?.isReady) return;
+  try {
+    await client.incr(`${responseCachePrefix}:version:${encodeURIComponent(userId)}`);
+  } catch (error) {
+    reportCacheError(error);
+  }
 }
