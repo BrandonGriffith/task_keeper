@@ -25,6 +25,7 @@ export async function connectToDatabase() {
       await Promise.all([
         connectingDatabase.collection('users').createIndex({ email: 1 }, { unique: true }),
         connectingDatabase.collection('tasks').createIndex({ userId: 1, archived: 1, nextDueAt: 1 }),
+        connectingDatabase.collection('tasks').createIndex({ archived: 1, nextDueAt: 1 }),
         connectingDatabase.collection('occurrences').createIndex(
           { taskId: 1, dueAt: 1 },
           { unique: true },

@@ -177,6 +177,7 @@ The server uses the official MongoDB Node.js driver directly. Documents use UUID
 
 - Unique normalized user email.
 - Task lookup by owner, archive state, and next due time.
+- Global scheduler lookup by archive state and next due time.
 - Unique occurrence per task and due instant.
 - Occurrence lookup by task/status/due time; by user/history ordering; by status/due/notification state; and by status/snooze time.
 - Notification lookup by owner and creation time.
