@@ -97,7 +97,10 @@ async function insertScheduleAdjustment(task, occurrence, created, session) {
 async function createUpcomingOccurrences(changedUserIds) {
   const database = getDatabase();
   const tasks = await database.collection('tasks')
-    .find({ archived: false })
+    .find({
+      archived: false,
+      nextDueAt: { $lte: new Date(Date.now() + occurrenceHorizonMs) },
+    })
     .sort({ nextDueAt: 1 })
     .limit(100)
     .toArray();
