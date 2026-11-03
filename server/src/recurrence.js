@@ -83,8 +83,12 @@ function toUtcInstant(date, dueTime, timeZone) {
   const [hour, minute] = dueTime.split(':').map(Number);
   const target = Date.UTC(year, month - 1, day, hour, minute);
   let candidate = new Date(target);
+  const seen = new Set();
 
-  for (let attempt = 0; attempt < 4; attempt += 1) {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    if (seen.has(candidate.getTime())) return candidate;
+    seen.add(candidate.getTime());
+
     const actual = localDateTimeParts(candidate, timeZone);
     const represented = Date.UTC(
       actual.year,
@@ -95,11 +99,11 @@ function toUtcInstant(date, dueTime, timeZone) {
       actual.second,
     );
     const difference = target - represented;
-    if (difference === 0) break;
+    if (difference === 0) return candidate;
     candidate = new Date(candidate.getTime() + difference);
   }
 
-  return candidate;
+  throw new Error(`Could not resolve local time ${date} ${dueTime} in ${timeZone}`);
 }
 
 function dueForDate(config, date) {

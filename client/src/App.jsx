@@ -475,6 +475,7 @@ export default function App() {
   ));
   const [browserAlertsReady, setBrowserAlertsReady] = useState(false);
   const notificationIds = useRef(new Set());
+  const toastTimer = useRef(null);
 
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = darkMode ? 'dark' : 'light';
@@ -595,9 +596,15 @@ export default function App() {
     document.title = unreadCount > 0 ? `(${unreadCount}) task_keeper` : 'task_keeper';
   }, [unreadCount]);
 
+  useEffect(() => () => window.clearTimeout(toastTimer.current), []);
+
   function notify(message) {
+    window.clearTimeout(toastTimer.current);
     setToast(message);
-    window.setTimeout(() => setToast(''), 3200);
+    toastTimer.current = window.setTimeout(() => {
+      toastTimer.current = null;
+      setToast('');
+    }, 3200);
   }
 
   async function saveTask(payload) {

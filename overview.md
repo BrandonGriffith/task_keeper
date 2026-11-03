@@ -47,7 +47,7 @@ Additional scheduling behavior:
 - Server validation checks required recurrence fields, title and notes length, due-time format, timezone identifiers, and valid yearly calendar dates.
 - Monthly dates unavailable in a particular month are clamped to that month's final day. For example, a task scheduled on the 31st occurs on February's final day. The app records the adjustment and creates a schedule-adjustment notification.
 - February 29 is excluded from yearly schedules.
-- Recurrences are calculated in the schedule's IANA timezone so the local due hour remains stable across daylight-saving transitions.
+- Recurrences are calculated in the schedule's IANA timezone so the local due hour remains stable across daylight-saving transitions. If a scheduled local time falls in a spring-forward gap, it shifts forward by the gap (for example, 02:30 becomes 03:30).
 - Users can create, edit, complete, snooze, archive, and restore tasks.
 - Editing a task supersedes already-due open occurrences, clears their snoozes, and replaces future occurrences for the old schedule while preserving completed history.
 - Archiving hides a task from the active list without deleting its occurrences or history. Archived tasks can be permanently deleted, along with their occurrences, linked notifications, and pending notification deliveries.
@@ -347,7 +347,7 @@ Run from the repository root:
 | `npm run build` | Builds the React client into the repository-root `build/` folder |
 | `npm start` | Starts the API, MongoDB client, and reminder scheduler |
 
-This repository currently has no automated test suite. Use `npm run build` for client build validation and the browser-control skill for safe, user-visible workflow checks. Verify API behavior with the running app when the change affects server routes or scheduling.
+Run `npm test` from the repository root for server unit tests, and `npm run build` for client build validation. Use the browser-control skill for safe, user-visible workflow checks. Verify API behavior with the running app when the change affects server routes or scheduling.
 
 On Windows, if PowerShell blocks the `npm.ps1` shim, run commands as `npm.cmd run dev`, `npm.cmd run build`, and similar.
 

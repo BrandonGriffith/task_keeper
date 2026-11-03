@@ -13,6 +13,7 @@ A personal recurring-task manager (daily, weekly, monthly, yearly) with missed-t
 | Install | `npm install` |
 | Run everything (API :3001 + web :5173) | `npm run dev` |
 | Production build | `npm run build` |
+| Run server unit tests | `npm test` |
 | Run production server (after build, with `NODE_ENV=production`) | `npm start` |
 
 On Windows PowerShell, use `npm.cmd` if `npm.ps1` is blocked. PowerShell has no `&&`; chain with `;`.
@@ -52,7 +53,7 @@ For production, build the client first, set `NODE_ENV=production` in the server 
 
 ## Verification notes
 
-- This repository has no automated test suite. Run `npm run build` for client build validation; use the browser-control skill for safe, user-visible workflow checks.
+- Run `npm test` for server unit tests and `npm run build` for client build validation; use the browser-control skill for safe, user-visible workflow checks.
 - Editing server files restarts the API (`node --watch`); wait for "API listening" before checking API behavior.
 - Preserve key flows: register/login, create tasks of all four frequencies, edit after snooze or missed (no stale "snoozed until" or "missed occurrence"), repeated 30-minute snoozes, complete, clear history and notifications, and delete individual history/notifications/archived tasks.
 

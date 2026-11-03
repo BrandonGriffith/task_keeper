@@ -55,6 +55,8 @@ NODE_ENV=production npm start
 
 The client build is written to the repository-root `build/` folder, which is ignored by Git. Generate it in the deployment pipeline or deploy it as a build artifact alongside the server; a source checkout by itself does not include the build. Configure `MONGODB_URI` and `JWT_SECRET` through the server environment or a secret manager. Serve the app over HTTPS so production session cookies work securely.
 
+Run the server's automated unit tests with `npm test` from the repository root.
+
 ## Working with AI agents
 
 [AGENTS.md](./AGENTS.md) summarizes commands, conventions, UI rules, and pitfalls for AI coding agents such as Codex or Copilot.
@@ -67,7 +69,7 @@ The repository-shared [task_keeper control skill](./.github/skills/task-keeper-c
 - Optional Redis-backed shared rate limits for registration and login across API instances, plus a short-lived per-user cache for task lists, history, notifications, and notification settings. Cached responses expire after 10 seconds and are invalidated after relevant writes; without Redis, API reads go directly to MongoDB and rate limits remain in process memory.
 - Per-user tasks with title, notes, local due time, and IANA timezone.
 - Daily, weekly, monthly, and yearly recurrence.
-- Timezone-aware scheduling that retains the local due hour across daylight-saving time changes.
+- Timezone-aware scheduling that retains the local due hour across daylight-saving time changes; nonexistent spring-forward times shift forward by the DST gap (for example, 02:30 becomes 03:30).
 - History keeps each occurrence's original timezone when a task's schedule is edited.
 - Monthly dates that do not occur in a month (for example, the 31st in February) shift to that month's last day and create a schedule-adjustment notification.
 - Yearly tasks reject February 29 and invalid calendar dates.
