@@ -1,6 +1,16 @@
 import { z } from 'zod';
 import { HttpError } from './errors.js';
 
+const credentialsSchema = z.object({
+  email: z.string().trim().email().max(254).transform((value) => value.toLowerCase()),
+  password: z.string()
+    .min(10)
+    .max(128)
+    .refine((value) => Buffer.byteLength(value, 'utf8') <= 72, {
+      message: 'Password must not exceed 72 UTF-8 bytes',
+    }),
+});
+
 const baseTask = z.object({
   title: z.string().trim().min(1).max(120),
   description: z.string().trim().max(2000).default(''),
@@ -12,6 +22,10 @@ const baseTask = z.object({
   yearlyMonth: z.number().int().min(1).max(12).optional(),
   yearlyDay: z.number().int().min(1).max(31).optional(),
 });
+
+export function parseCredentials(body) {
+  return credentialsSchema.parse(body);
+}
 
 export function parseTaskInput(body) {
   const input = baseTask.parse(body);

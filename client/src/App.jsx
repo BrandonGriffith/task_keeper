@@ -50,6 +50,10 @@ function AuthScreen({ onSignedIn, darkMode, onThemeChange }) {
   async function submit(event) {
     event.preventDefault();
     setError('');
+    if (new TextEncoder().encode(password).length > 72) {
+      setError('Password cannot exceed 72 UTF-8 bytes.');
+      return;
+    }
     setBusy(true);
     try {
       const result = await api(`/auth/${mode === 'signup' ? 'register' : 'login'}`, {
@@ -94,7 +98,9 @@ function AuthScreen({ onSignedIn, darkMode, onThemeChange }) {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
             />
-            {mode === 'signup' && <small>Use at least 10 characters.</small>}
+            <small>
+              Use at least 10 characters and no more than 72 UTF-8 bytes.
+            </small>
           </label>
           {error && <p className="error-message" role="alert">{error}</p>}
           <button className="primary-button" disabled={busy}>

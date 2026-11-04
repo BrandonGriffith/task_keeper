@@ -31,7 +31,7 @@ Use the browser UI for requested task_keeper operations and frontend testing. Do
 
 ## Safety and scope
 
-- Use only an account supplied by the user or explicitly designated for testing. For a broad test with no signed-in test account, create one through the UI using a unique `test-…@example.com` address and a throwaway password; passwords must be 10–128 characters. Never invent credentials for a real account.
+- Use only an account supplied by the user or explicitly designated for testing. For a broad test with no signed-in test account, create one through the UI using a unique `test-…@example.com` address and a throwaway password; passwords must be at least 10 characters and no more than 72 UTF-8 bytes. Never invent credentials for a real account.
 - Prefer reusing a designated disposable test account. Authentication is limited to 10 requests per minute: do not create repeated test accounts or rapidly retry failed sign-in/registration. Verify app/API readiness before a single retry.
 - Treat tasks, history, notifications, reminder preferences, and account data as user data. Do not mutate existing data unless the user requested that specific operation. For smoke tests, create uniquely named test tasks and only mutate those tasks and test-generated notifications.
 - Do not permanently delete tasks, history, notifications, or accounts to clean up a test unless explicitly requested. Never clean up through direct database access. The UI has no account-deletion flow; disclose any test account/data that remains.

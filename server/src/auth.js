@@ -3,16 +3,12 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { Router } from 'express';
 import { rateLimit } from 'express-rate-limit';
-import { z } from 'zod';
 import { getDatabase } from './db.js';
 import { HttpError } from './errors.js';
 import { createAuthRateLimitStore } from './redis.js';
+import { parseCredentials } from './validation.js';
 
 const router = Router();
-const credentials = z.object({
-  email: z.string().trim().email().max(254).transform((value) => value.toLowerCase()),
-  password: z.string().min(10).max(128),
-});
 
 function tokenFor(user) {
   return jwt.sign({ sub: user._id, email: user.email }, process.env.JWT_SECRET, { expiresIn: '7d' });
@@ -37,7 +33,7 @@ const authLimiter = rateLimit({
 });
 
 router.post('/register', authLimiter, async (request, response) => {
-  const input = credentials.parse(request.body);
+  const input = parseCredentials(request.body);
   const user = {
     _id: randomUUID(),
     email: input.email,
@@ -62,7 +58,7 @@ router.post('/register', authLimiter, async (request, response) => {
 });
 
 router.post('/login', authLimiter, async (request, response) => {
-  const input = credentials.parse(request.body);
+  const input = parseCredentials(request.body);
   const user = await getDatabase().collection('users').findOne({ email: input.email });
   if (!user || !(await bcrypt.compare(input.password, user.passwordHash))) {
     throw new HttpError(401, 'Email or password is incorrect');

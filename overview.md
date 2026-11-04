@@ -23,7 +23,7 @@ MongoDB driver 7 requires Node.js 20.19 or later. A standalone local `mongod` is
 
 - Account registration, sign-in, session lookup, and sign-out.
 - Email addresses are trimmed and normalized to lowercase.
-- Passwords must contain 10–128 characters and are stored as bcrypt hashes.
+- Passwords must contain at least 10 characters and no more than 72 UTF-8 bytes, matching bcrypt's effective input limit; they are stored as bcrypt hashes. Existing accounts created with longer passwords may need to sign in using the effective first 72 bytes. Bcrypt discarded any suffix when those hashes were created; the app currently has no password-reset flow for passwords whose truncation split a multibyte UTF-8 character.
 - Authentication uses a signed JSON Web Token in an HTTP-only cookie. The cookie is `SameSite=Lax`, valid for seven days, and marked `Secure` in production.
 - Registration and login are limited to 10 requests per minute per client IP as reported by Express. `REDIS_URL` enables a shared Redis store across API instances; if Redis is unavailable, the limiter falls back to process-local memory.
 - Redis-backed API read caching is scoped by user ID, expires after 10 seconds, and is invalidated after task, history, notification, preference, and scheduler writes. If Redis is not configured or a cache read fails, requests read from MongoDB; if invalidation fails, the 10-second expiry bounds how long a cached response can remain stale. Caching is intended to reduce repeated database reads, not guarantee lower latency in every deployment.

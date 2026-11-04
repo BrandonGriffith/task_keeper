@@ -65,7 +65,7 @@ The repository-shared [task_keeper control skill](./.github/skills/task-keeper-c
 
 ## Features
 
-- User registration and login with bcrypt password hashes, signed HTTP-only JWT cookies, and rate-limited authentication endpoints.
+- User registration and login with bcrypt password hashes, signed HTTP-only JWT cookies, and rate-limited authentication endpoints. Passwords must contain at least 10 characters and no more than 72 UTF-8 bytes, matching bcrypt's input limit. Existing accounts created with longer passwords may need to sign in using the effective first 72 bytes. Bcrypt discarded any suffix when those hashes were created; the app currently has no password-reset flow for passwords whose truncation split a multibyte UTF-8 character.
 - Optional Redis-backed shared rate limits for registration and login across API instances, plus a short-lived per-user cache for task lists, history, notifications, and notification settings. Cached responses expire after 10 seconds and are invalidated after relevant writes; without Redis, API reads go directly to MongoDB and rate limits remain in process memory.
 - Per-user tasks with title, notes, local due time, and IANA timezone.
 - Daily, weekly, monthly, and yearly recurrence.
