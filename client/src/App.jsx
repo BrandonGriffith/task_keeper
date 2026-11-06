@@ -127,24 +127,32 @@ function AuthScreen({ onSignedIn, darkMode, onThemeChange }) {
   );
 }
 
-function defaultDueTime(now = new Date()) {
+function defaultTaskSchedule(now = new Date()) {
   const suggested = new Date(now.getTime() + 10 * 60_000);
-  return `${String(suggested.getHours()).padStart(2, '0')}:${String(suggested.getMinutes()).padStart(2, '0')}`;
+  const yearlyDateIsLeapDay = suggested.getMonth() === 1 && suggested.getDate() === 29;
+  return {
+    dueTime: `${String(suggested.getHours()).padStart(2, '0')}:${String(suggested.getMinutes()).padStart(2, '0')}`,
+    weeklyDay: suggested.getDay(),
+    monthlyDay: suggested.getDate(),
+    yearlyMonth: yearlyDateIsLeapDay ? 3 : suggested.getMonth() + 1,
+    yearlyDay: yearlyDateIsLeapDay ? 1 : suggested.getDate(),
+  };
 }
 
 function TaskForm({ task, onClose, onSave }) {
   const now = new Date();
+  const defaults = defaultTaskSchedule(now);
   const monthLength = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const [form, setForm] = useState(() => ({
     title: task?.title ?? '',
     description: task?.description ?? '',
     frequency: task?.frequency ?? 'daily',
-    dueTime: task?.due_time?.slice(0, 5) ?? defaultDueTime(now),
+    dueTime: task?.due_time?.slice(0, 5) ?? defaults.dueTime,
     timezone: task?.timezone ?? localTimezone(),
-    weeklyDay: task?.weekly_day ?? now.getDay(),
-    monthlyDay: task?.monthly_day ?? Math.min(now.getDate(), monthLength),
-    yearlyMonth: task?.yearly_month ?? now.getMonth() + 1,
-    yearlyDay: task?.yearly_day ?? Math.min(now.getDate(), monthLength),
+    weeklyDay: task?.weekly_day ?? defaults.weeklyDay,
+    monthlyDay: task?.monthly_day ?? Math.min(defaults.monthlyDay, monthLength),
+    yearlyMonth: task?.yearly_month ?? defaults.yearlyMonth,
+    yearlyDay: task?.yearly_day ?? defaults.yearlyDay,
   }));
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
