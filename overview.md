@@ -347,7 +347,7 @@ Run from the repository root:
 | `npm run build` | Builds the React client into the repository-root `build/` folder |
 | `npm start` | Starts the API, MongoDB client, and reminder scheduler |
 
-Run `npm test` from the repository root for server unit tests, and `npm run build` for client build validation. Use the browser-control skill for safe, user-visible workflow checks. Verify API behavior with the running app when the change affects server routes or scheduling.
+Run `npm run build` for client build validation. Use the browser-control skill for safe, user-visible workflow checks. Verify API behavior with the running app when the change affects server routes or scheduling.
 
 On Windows, if PowerShell blocks the `npm.ps1` shim, run commands as `npm.cmd run dev`, `npm.cmd run build`, and similar.
 

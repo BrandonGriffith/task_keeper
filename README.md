@@ -55,8 +55,6 @@ NODE_ENV=production npm start
 
 The client build is written to the repository-root `build/` folder, which is ignored by Git. Generate it in the deployment pipeline or deploy it as a build artifact alongside the server; a source checkout by itself does not include the build. Configure `MONGODB_URI` and `JWT_SECRET` through the server environment or a secret manager. Serve the app over HTTPS so production session cookies work securely.
 
-Run the server's automated unit tests with `npm test` from the repository root.
-
 ## Working with AI agents
 
 [AGENTS.md](./AGENTS.md) summarizes commands, conventions, UI rules, and pitfalls for AI coding agents such as Codex or Copilot.

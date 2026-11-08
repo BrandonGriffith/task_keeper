@@ -4,7 +4,6 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch --watch-preserve-output src/index.js",
-    "test": "node --test",
     "start": "node src/index.js"
   },
   "dependencies": {

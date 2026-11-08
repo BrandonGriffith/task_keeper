@@ -299,53 +299,6 @@ router.delete('/history', async (request, response) => {
   return response.status(204).end();
 });
 
-router.delete('/:id', async (request, response) => {
-  const task = await ownedTask(request.user.id, request.params.id);
-  if (!task.archived) {
-    await getDatabase().collection('tasks').updateOne(
-      { _id: task._id, userId: request.user.id },
-      { $set: { archived: true, updatedAt: new Date() } },
-    );
-  }
-  await invalidateUserReadCache(request.user.id);
-  return response.status(204).end();
-});
-
-router.delete('/:id/permanent', async (request, response) => {
-  const database = getDatabase();
-  await withMongoTransaction(async (session) => {
-    const task = await ownedTask(request.user.id, request.params.id, session);
-    if (!task.archived) throw new HttpError(409, 'Archive this task before deleting it permanently');
-
-    const occurrences = database.collection('occurrences');
-    const taskOccurrences = await occurrences.find(
-      { taskId: task._id, userId: request.user.id },
-      { projection: { _id: 1 }, session },
-    ).toArray();
-    const occurrenceIds = taskOccurrences.map((occurrence) => occurrence._id);
-    await deleteOccurrenceNotifications(database, request.user.id, occurrenceIds, session);
-    await occurrences.deleteMany({ taskId: task._id, userId: request.user.id }, { session });
-    await database.collection('tasks').deleteOne(
-      { _id: task._id, userId: request.user.id, archived: true },
-      { session },
-    );
-  });
-  await invalidateUserReadCache(request.user.id);
-  return response.status(204).end();
-});
-
-router.post('/:id/restore', async (request, response) => {
-  const task = await ownedTask(request.user.id, request.params.id);
-  if (task.archived) {
-    await getDatabase().collection('tasks').updateOne(
-      { _id: task._id, userId: request.user.id },
-      { $set: { archived: false, updatedAt: new Date() } },
-    );
-  }
-  await invalidateUserReadCache(request.user.id);
-  return response.status(204).end();
-});
-
 router.get('/history', async (request, response) => {
   const parsedLimit = Number(request.query.limit ?? 100);
   const parsedOffset = Number(request.query.offset ?? 0);
@@ -402,6 +355,53 @@ router.delete('/history/:id', async (request, response) => {
       { session },
     );
   });
+  await invalidateUserReadCache(request.user.id);
+  return response.status(204).end();
+});
+
+router.delete('/:id', async (request, response) => {
+  const task = await ownedTask(request.user.id, request.params.id);
+  if (!task.archived) {
+    await getDatabase().collection('tasks').updateOne(
+      { _id: task._id, userId: request.user.id },
+      { $set: { archived: true, updatedAt: new Date() } },
+    );
+  }
+  await invalidateUserReadCache(request.user.id);
+  return response.status(204).end();
+});
+
+router.delete('/:id/permanent', async (request, response) => {
+  const database = getDatabase();
+  await withMongoTransaction(async (session) => {
+    const task = await ownedTask(request.user.id, request.params.id, session);
+    if (!task.archived) throw new HttpError(409, 'Archive this task before deleting it permanently');
+
+    const occurrences = database.collection('occurrences');
+    const taskOccurrences = await occurrences.find(
+      { taskId: task._id, userId: request.user.id },
+      { projection: { _id: 1 }, session },
+    ).toArray();
+    const occurrenceIds = taskOccurrences.map((occurrence) => occurrence._id);
+    await deleteOccurrenceNotifications(database, request.user.id, occurrenceIds, session);
+    await occurrences.deleteMany({ taskId: task._id, userId: request.user.id }, { session });
+    await database.collection('tasks').deleteOne(
+      { _id: task._id, userId: request.user.id, archived: true },
+      { session },
+    );
+  });
+  await invalidateUserReadCache(request.user.id);
+  return response.status(204).end();
+});
+
+router.post('/:id/restore', async (request, response) => {
+  const task = await ownedTask(request.user.id, request.params.id);
+  if (task.archived) {
+    await getDatabase().collection('tasks').updateOne(
+      { _id: task._id, userId: request.user.id },
+      { $set: { archived: false, updatedAt: new Date() } },
+    );
+  }
   await invalidateUserReadCache(request.user.id);
   return response.status(204).end();
 });
