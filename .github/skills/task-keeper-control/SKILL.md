@@ -18,6 +18,8 @@ Use the browser UI for requested task_keeper operations and frontend testing. Do
 5. If dependencies are missing, use the repository's lockfile and package-manager instructions to install them. If required configuration or database access is missing, report the blocker. Never read, print, or request secrets from `.env`; do not invent configuration values or credentials.
 6. Open or reuse the browser page, confirm the page title and origin, and read the current UI before acting. Determine whether someone is already signed in and inspect which view is open. Do not sign out an existing user unless requested.
 
+Development Vite and API servers bind to all interfaces by default. Only start or use them on a trusted network; do not treat localhost development mode as a secure deployment.
+
 ## UI map (use these exact labels)
 
 - **Auth page**: fields **Email** and **Password** (10–128 characters; passwords are also limited to 72 UTF-8 bytes); submit button is **Sign in** or **Create account**; the mode link at the bottom is **Create an account** / **Sign in**. Errors appear in a `role="alert"` paragraph. The **Dark mode** switch sits at the bottom.

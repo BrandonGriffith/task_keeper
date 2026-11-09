@@ -2,6 +2,16 @@
 
 A personal-first recurring task manager built with JavaScript, React, Node.js/Express, and MongoDB. Create daily, weekly, monthly, and yearly routines; mark each occurrence complete; review missed and completed history; and receive reminders.
 
+## Contents
+
+- [Requirements](#requirements)
+- [Configure MongoDB Atlas](#configure-mongodb-atlas)
+- [Run in development](#run-in-development)
+- [Build and run in production](#build-and-run-in-production)
+- [Working with AI agents](#working-with-ai-agents)
+- [Features](#features)
+- [Environment variables](#environment-variables)
+
 ## Requirements
 
 - Node.js 20.19 or newer (required by the MongoDB Node.js driver)
@@ -29,6 +39,8 @@ npm run dev
 ```
 
 The React frontend is served at `http://localhost:5173`. The Express API listens at `http://localhost:3001`, and Vite proxies `/api` requests to it.
+
+**Network exposure:** The development Vite server is explicitly bound to `0.0.0.0`, and the API also listens on all interfaces by default. Other devices on the same network may be able to reach them. Use development mode only on a trusted network; use HTTPS and production configuration for deployments.
 
 The local servers start even when MongoDB Atlas cannot be reached and retry the database connection every five seconds. If Wi-Fi or internet access drops, the app remains open on localhost, but account and task data needs MongoDB and will be unavailable until the database connection returns.
 

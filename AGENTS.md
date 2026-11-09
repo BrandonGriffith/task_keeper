@@ -24,6 +24,7 @@ For production, build the client first, set `NODE_ENV=production` in the server 
 1. `.env` must exist with `MONGODB_URI` and a long random `JWT_SECRET`; never print, log, commit, or paste it.
 2. Check whether the app is already running: `curl http://localhost:3001/api/health` should return `{"status":"ok"}`.
 3. Run `git status` and `git log` to see the current state. Commit meaningful changes.
+4. Development Vite and API servers bind to all interfaces by default; use them only on a trusted network.
 
 ## Where things live
 
@@ -53,6 +54,7 @@ For production, build the client first, set `NODE_ENV=production` in the server 
 ## Verification notes
 
 - Run `npm run build` for client build validation; use the browser-control skill for safe, user-visible workflow checks.
+- There is no automated test script in the root or workspace package manifests; run focused checks for the changed behavior.
 - Editing server files restarts the API (`node --watch`); wait for "API listening" before checking API behavior.
 - Preserve key flows: register/login, create tasks of all four frequencies, edit after snooze or missed (no stale "snoozed until" or "missed occurrence"), repeated 30-minute snoozes, complete, clear history and notifications, and delete individual history/notifications/archived tasks.
 

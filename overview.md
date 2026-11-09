@@ -6,6 +6,21 @@
 
 The application is written in JavaScript and Node.js. It consists of a React browser client, an Express API, MongoDB persistence, and optional Redis-backed authentication rate limiting and short-lived API read caching. The API process also runs the background scheduler that creates occurrences and dispatches notifications.
 
+## Contents
+
+- [Current technology and requirements](#current-technology-and-requirements)
+- [Features and behavior](#features-and-behavior)
+- [Architecture and repository layout](#architecture-and-repository-layout)
+- [MongoDB data model](#mongodb-data-model)
+- [API overview](#api-overview)
+- [Background scheduler](#background-scheduler)
+- [Dependencies](#dependencies)
+- [Configuration](#configuration)
+- [Local development and production](#local-development-and-production)
+- [Scripts](#scripts)
+- [Known gotchas](#known-gotchas)
+- [Product scope](#product-scope)
+
 ## Current technology and requirements
 
 - Node.js 20.19 or newer and npm.
@@ -324,6 +339,8 @@ Create a private `.env` file in the project root; `.env` is local configuration 
    ```
 
 The frontend runs at `http://localhost:5173` and the API at `http://localhost:3001`.
+
+**Network exposure:** Vite is started with `--host 0.0.0.0`, and the Express listener does not specify a host, so both development servers bind beyond loopback. Treat development mode as reachable by other devices on the network and use it only on a trusted network.
 
 The API begins listening before connecting to MongoDB and retries an unavailable database connection every five seconds. This keeps the local app available when Wi-Fi or internet access drops, but account and task operations still require the MongoDB database and resume when it is reachable again.
 
