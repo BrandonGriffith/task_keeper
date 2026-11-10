@@ -44,6 +44,8 @@ The React frontend is served at `http://localhost:5173`. The Express API listens
 
 The local servers start even when MongoDB Atlas cannot be reached and retry the database connection every five seconds. If Wi-Fi or internet access drops, the app remains open on localhost, but account and task data needs MongoDB and will be unavailable until the database connection returns.
 
+If Vite starts before the API is listening, the browser retries its initial session check for several seconds. If the API is still unavailable, the sign-in page shows a connection error and a **Retry connection** button.
+
 When switching from WSL to Windows in the same checkout, stop the WSL dev server and run `switch-to-windows.cmd` from the repository root. It removes the workspace links created by WSL and reinstalls Windows-native dependencies. Do not run Windows and WSL installs against the same `node_modules` at the same time.
 
 ## Build and run in production

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { api } from './api.js';
 
 const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const authRetryDelaysMs = [250, 500, 1000, 2000, 4000];
 
 function localTimezone() {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -40,7 +41,14 @@ function ThemeFooter({ darkMode, onThemeChange }) {
   );
 }
 
-function AuthScreen({ onSignedIn, darkMode, onThemeChange }) {
+function AuthScreen({
+  onSignedIn,
+  darkMode,
+  onThemeChange,
+  startupError,
+  onRetryStartup,
+  onClearStartupError,
+}) {
   const [mode, setMode] = useState('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -50,6 +58,7 @@ function AuthScreen({ onSignedIn, darkMode, onThemeChange }) {
   async function submit(event) {
     event.preventDefault();
     setError('');
+    onClearStartupError();
     if (new TextEncoder().encode(password).length > 72) {
       setError('Password cannot exceed 72 UTF-8 bytes.');
       return;
@@ -102,6 +111,14 @@ function AuthScreen({ onSignedIn, darkMode, onThemeChange }) {
               Use at least 10 characters and no more than 72 UTF-8 bytes.
             </small>
           </label>
+          {startupError && (
+            <>
+              <p className="error-message" role="alert">{startupError}</p>
+              <button type="button" className="text-button" onClick={onRetryStartup}>
+                Retry connection
+              </button>
+            </>
+          )}
           {error && <p className="error-message" role="alert">{error}</p>}
           <button className="primary-button" disabled={busy}>
             {busy ? 'Please wait…' : mode === 'signup' ? 'Create account' : 'Sign in'}
@@ -465,6 +482,7 @@ function NotificationSettings({
 export default function App() {
   const [user, setUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
+  const [authRetryKey, setAuthRetryKey] = useState(0);
   const [darkMode, setDarkMode] = useState(() => {
     const savedTheme = window.localStorage.getItem('theme');
     return savedTheme === null || savedTheme === 'dark';
@@ -514,13 +532,45 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    api('/auth/me')
-      .then((result) => setUser(result.user))
-      .catch((error) => {
-        if (error.status !== 401) setPageError(error.message);
-      })
-      .finally(() => setAuthChecked(true));
-  }, []);
+    let active = true;
+    let retryTimer;
+
+    async function checkSession() {
+      let attempt = 0;
+      while (active) {
+        try {
+          const result = await api('/auth/me');
+          if (active) {
+            setPageError('');
+            setUser(result.user);
+          }
+          break;
+        } catch (error) {
+          if (!active) return;
+          if (error.status === 401) break;
+          if (error.status !== undefined && error.status < 500) {
+            if (active) setPageError(error.message);
+            break;
+          }
+          if (attempt >= authRetryDelaysMs.length) {
+            if (active) setPageError(error.message);
+            break;
+          }
+          await new Promise((resolve) => {
+            retryTimer = window.setTimeout(resolve, authRetryDelaysMs[attempt]);
+          });
+          attempt += 1;
+        }
+      }
+      if (active) setAuthChecked(true);
+    }
+
+    void checkSession();
+    return () => {
+      active = false;
+      window.clearTimeout(retryTimer);
+    };
+  }, [authRetryKey]);
 
   useEffect(() => {
     if (!user) return;
@@ -841,9 +891,19 @@ export default function App() {
   if (!user) {
     return (
       <AuthScreen
-        onSignedIn={setUser}
+        onSignedIn={(account) => {
+          setPageError('');
+          setUser(account);
+        }}
         darkMode={darkMode}
         onThemeChange={setDarkMode}
+        startupError={pageError}
+        onClearStartupError={() => setPageError('')}
+        onRetryStartup={() => {
+          setPageError('');
+          setAuthChecked(false);
+          setAuthRetryKey((current) => current + 1);
+        }}
       />
     );
   }
