@@ -3,7 +3,11 @@ import nodemailer from 'nodemailer';
 import webPush from 'web-push';
 import { emailConfigured, pushConfigured } from './config.js';
 import { getDatabase, withMongoTransaction } from './db.js';
-import { nextOccurrence, occurrenceDateAdjusted } from './recurrence.js';
+import {
+  missedOccurrenceExpiresAt,
+  nextOccurrence,
+  occurrenceDateAdjusted,
+} from './recurrence.js';
 import { invalidateUserReadCache } from './redis.js';
 
 const intervalMs = 15_000;
@@ -281,7 +285,14 @@ async function createDueReminders(changedUserIds) {
           initialNotifiedAt: null,
           snoozedUntil: null,
         },
-        { $set: { status: 'missed', missedAt: now, initialNotifiedAt: now } },
+        {
+          $set: {
+            status: 'missed',
+            missedAt: now,
+            initialNotifiedAt: now,
+            missedExpiresAt: missedOccurrenceExpiresAt(taskSchedule(task), occurrence.dueAt),
+          },
+        },
         { returnDocument: 'after', session },
       );
       if (!updated) return false;
@@ -309,6 +320,7 @@ async function createDueReminders(changedUserIds) {
       }, { session });
       if (!task) return false;
       const now = new Date();
+      const becomesMissed = occurrence.status === 'pending' && !occurrence.initialNotifiedAt;
       const updated = await occurrences.findOneAndUpdate(
         {
           _id: occurrence._id,
@@ -319,8 +331,13 @@ async function createDueReminders(changedUserIds) {
         {
           $set: {
             snoozedUntil: null,
-            ...(occurrence.status === 'pending' && !occurrence.initialNotifiedAt
-              ? { status: 'missed', missedAt: now, initialNotifiedAt: now }
+            ...(becomesMissed
+              ? {
+                status: 'missed',
+                missedAt: now,
+                initialNotifiedAt: now,
+                missedExpiresAt: missedOccurrenceExpiresAt(taskSchedule(task), occurrence.dueAt),
+              }
               : {}),
           },
         },
@@ -384,6 +401,62 @@ async function createDueReminders(changedUserIds) {
       return true;
     });
     if (changed) changedUserIds.add(occurrence.userId);
+  }
+}
+
+async function expireMissedOccurrences(changedUserIds) {
+  const database = getDatabase();
+  const occurrences = database.collection('occurrences');
+  const now = new Date();
+  const legacyMissed = await occurrences.find({
+    status: 'missed',
+    supersededAt: { $exists: false },
+    missedExpiresAt: { $exists: false },
+    dueAt: { $lte: now },
+  }).sort({ dueAt: 1 }).limit(100).toArray();
+
+  for (const occurrence of legacyMissed) {
+    const task = await database.collection('tasks').findOne({
+      _id: occurrence.taskId,
+      userId: occurrence.userId,
+    });
+    const missedExpiresAt = task
+      ? missedOccurrenceExpiresAt(taskSchedule(task), occurrence.dueAt)
+      : now;
+    const update = await occurrences.updateOne(
+      {
+        _id: occurrence._id,
+        status: 'missed',
+        supersededAt: { $exists: false },
+        missedExpiresAt: { $exists: false },
+      },
+      {
+        $set: {
+          missedExpiresAt,
+          ...(missedExpiresAt <= now ? { supersededAt: now, snoozedUntil: null } : {}),
+        },
+      },
+    );
+    if (update.modifiedCount && missedExpiresAt <= now) changedUserIds.add(occurrence.userId);
+  }
+
+  const missed = await occurrences.find({
+    status: 'missed',
+    supersededAt: { $exists: false },
+    missedExpiresAt: { $lte: now },
+  }).sort({ missedExpiresAt: 1 }).limit(100).toArray();
+
+  for (const occurrence of missed) {
+    const expired = await occurrences.updateOne(
+      {
+        _id: occurrence._id,
+        status: 'missed',
+        supersededAt: { $exists: false },
+        missedExpiresAt: { $lte: now },
+      },
+      { $set: { supersededAt: now, snoozedUntil: null } },
+    );
+    if (expired.modifiedCount) changedUserIds.add(occurrence.userId);
   }
 }
 
@@ -541,6 +614,7 @@ export async function runSchedulerTick() {
     const changedUserIds = new Set();
     await createUpcomingOccurrences(changedUserIds);
     await createDueReminders(changedUserIds);
+    await expireMissedOccurrences(changedUserIds);
     await processDeliveryOutbox();
     await Promise.all([...changedUserIds].map((userId) => invalidateUserReadCache(userId)));
     return true;

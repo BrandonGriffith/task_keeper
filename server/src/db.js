@@ -33,6 +33,7 @@ export async function connectToDatabase() {
         connectingDatabase.collection('occurrences').createIndex({ taskId: 1, status: 1, dueAt: 1 }),
         connectingDatabase.collection('occurrences').createIndex({ userId: 1, dueAt: -1, _id: -1 }),
         connectingDatabase.collection('occurrences').createIndex({ status: 1, dueAt: 1, initialNotifiedAt: 1 }),
+        connectingDatabase.collection('occurrences').createIndex({ status: 1, missedExpiresAt: 1 }),
         connectingDatabase.collection('occurrences').createIndex({ status: 1, snoozedUntil: 1 }),
         connectingDatabase.collection('occurrences').createIndex({ status: 1, lastReminderAt: 1 }),
         connectingDatabase.collection('notifications').createIndex({ userId: 1, createdAt: -1 }),

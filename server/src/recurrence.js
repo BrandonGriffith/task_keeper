@@ -184,6 +184,12 @@ export function nextOccurrence(config, previousDueAt) {
   return followingOccurrence(config, new Date(previousDueAt));
 }
 
+export function missedOccurrenceExpiresAt(config, dueAt) {
+  const nextDueAt = nextOccurrence(config, dueAt).dueAt;
+  const nextDate = dateString(localDateParts(nextDueAt, config.timezone));
+  return toUtcInstant(nextDate, '00:00', config.timezone);
+}
+
 export function occurrenceDateAdjusted(config, dueAt) {
   if (config.frequency !== 'monthly') return false;
   const localDay = localDateParts(new Date(dueAt), config.timezone).day;
