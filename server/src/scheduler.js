@@ -456,7 +456,19 @@ async function expireMissedOccurrences(changedUserIds) {
       },
       { $set: { supersededAt: now, snoozedUntil: null } },
     );
-    if (expired.modifiedCount) changedUserIds.add(occurrence.userId);
+    if (expired.modifiedCount) {
+      const task = await database.collection('tasks').findOne({
+        _id: occurrence.taskId,
+        userId: occurrence.userId,
+        archived: false,
+      });
+      if (task) {
+        const next = nextOccurrence(taskSchedule(task), occurrence.dueAt);
+        const inserted = await insertOccurrence(task, next.dueAt, next.dateAdjusted);
+        await insertScheduleAdjustment(task, inserted.occurrence, inserted.created);
+      }
+      changedUserIds.add(occurrence.userId);
+    }
   }
 }
 
