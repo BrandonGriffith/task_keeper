@@ -33,10 +33,25 @@ The API creates the required MongoDB collections and indexes at startup. Atlas m
 
 ## Run in development
 
-```powershell
+Keep your private `.env` file with your MongoDB URI and JWT secret. Do not commit or share its contents.
+
+Start the app from WSL:
+
+```sh
 npm install
+docker compose -f compose.redis.yml up -d
 npm run dev
 ```
+
+If you use Windows PowerShell instead, use `npm.cmd` for the npm commands:
+
+```powershell
+npm.cmd install
+docker compose -f compose.redis.yml up -d
+npm.cmd run dev
+```
+
+If Docker reports permission denied from WSL, run the Compose command with `sudo`. Redis listens on `localhost:6379`; the Compose service stores its data in a named volume and enables append-only persistence. The server defaults `REDIS_URL` to `redis://localhost:6379`, so no `.env` edit is required for local Redis. Redis remains optional at runtime: when it is unavailable, authentication rate limits use process-local memory and cached reads go directly to MongoDB. Set `REDIS_URL=` in `.env` to disable Redis instead of attempting a connection.
 
 The React frontend is served at `http://localhost:5173`. The Express API listens at `http://localhost:3001`, and Vite proxies `/api` requests to it.
 
@@ -110,7 +125,7 @@ General:
 | `PORT` | `3001` | API listen port. |
 | `NODE_ENV` | unset | Set to `production` to enable secure-only session cookies. |
 | `ENV_FILE` | project `.env` | Optional path to the environment file. |
-| `REDIS_URL` | unset | Optional Redis connection URL for shared authentication rate limits and short-lived API read caching. |
+| `REDIS_URL` | `redis://localhost:6379` | Redis connection URL for shared authentication rate limits and short-lived API read caching. Set a different URL for hosted Redis, or leave it empty to disable Redis. If Redis is unavailable, the API uses its local fallbacks. |
 
 Optional email settings: `EMAIL_SMTP_HOST`, `EMAIL_SMTP_PORT`, `EMAIL_SMTP_SECURE`, `EMAIL_SMTP_USER`, `EMAIL_SMTP_PASSWORD`, and `EMAIL_FROM`.
 
