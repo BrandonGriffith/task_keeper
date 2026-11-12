@@ -21,21 +21,40 @@ export async function connectToDatabase() {
         || new URL(uri).pathname.slice(1)
         || 'task_keeper';
       const connectingDatabase = connectingClient.db(decodeURIComponent(databaseName));
+      const occurrences = connectingDatabase.collection('occurrences');
+      const hasOccurrences = await connectingDatabase
+        .listCollections({ name: 'occurrences' }, { nameOnly: true })
+        .hasNext();
+      if (hasOccurrences) {
+        const indexes = await occurrences.listIndexes().toArray();
+        const legacyIndexes = indexes.filter((index) => (
+          index.unique
+          && index.key.taskId === 1
+          && index.key.dueAt === 1
+          && !index.partialFilterExpression
+        ));
+        for (const index of legacyIndexes) await occurrences.dropIndex(index.name);
+      }
 
       await Promise.all([
         connectingDatabase.collection('users').createIndex({ email: 1 }, { unique: true }),
         connectingDatabase.collection('tasks').createIndex({ userId: 1, archived: 1, nextDueAt: 1 }),
         connectingDatabase.collection('tasks').createIndex({ archived: 1, nextDueAt: 1 }),
-        connectingDatabase.collection('occurrences').createIndex(
+        occurrences.createIndex(
           { taskId: 1, dueAt: 1 },
-          { unique: true },
+          {
+            unique: true,
+            partialFilterExpression: {
+              $or: [{ status: 'pending' }, { status: 'missed' }],
+            },
+          },
         ),
-        connectingDatabase.collection('occurrences').createIndex({ taskId: 1, status: 1, dueAt: 1 }),
-        connectingDatabase.collection('occurrences').createIndex({ userId: 1, dueAt: -1, _id: -1 }),
-        connectingDatabase.collection('occurrences').createIndex({ status: 1, dueAt: 1, initialNotifiedAt: 1 }),
-        connectingDatabase.collection('occurrences').createIndex({ status: 1, missedExpiresAt: 1 }),
-        connectingDatabase.collection('occurrences').createIndex({ status: 1, snoozedUntil: 1 }),
-        connectingDatabase.collection('occurrences').createIndex({ status: 1, lastReminderAt: 1 }),
+        occurrences.createIndex({ taskId: 1, status: 1, dueAt: 1 }),
+        occurrences.createIndex({ userId: 1, dueAt: -1, _id: -1 }),
+        occurrences.createIndex({ status: 1, dueAt: 1, initialNotifiedAt: 1 }),
+        occurrences.createIndex({ status: 1, missedExpiresAt: 1 }),
+        occurrences.createIndex({ status: 1, snoozedUntil: 1 }),
+        occurrences.createIndex({ status: 1, lastReminderAt: 1 }),
         connectingDatabase.collection('notifications').createIndex({ userId: 1, createdAt: -1 }),
         connectingDatabase.collection('notifications').createIndex(
           { occurrenceId: 1, kind: 1 },
