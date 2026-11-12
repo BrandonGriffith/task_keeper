@@ -24,6 +24,21 @@ function formatDue(instant, timezone) {
   }).format(new Date(instant));
 }
 
+function dateKeyInTimezone(instant, timezone) {
+  const values = Object.fromEntries(
+    new Intl.DateTimeFormat('en', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+      .formatToParts(instant)
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, Number(part.value)]),
+  );
+  return values.year * 10_000 + values.month * 100 + values.day;
+}
+
 function ThemeFooter({ darkMode, onThemeChange }) {
   return (
     <footer className="theme-footer">
@@ -359,6 +374,10 @@ function TaskForm({ task, onClose, onSave }) {
 function TaskCard({ task, onEdit, onComplete, onSnooze, onArchive, onRestore, onDelete }) {
   const isOpen = Boolean(task.occurrence_id);
   const dueNow = task.due_at && new Date(task.due_at) <= new Date();
+  const canComplete = task.due_at
+    && task.timezone
+    && dateKeyInTimezone(new Date(task.due_at), task.timezone)
+      <= dateKeyInTimezone(new Date(), task.timezone);
   const isMissed = task.occurrence_status === 'missed';
   const isSnoozed = task.snoozed_until && new Date(task.snoozed_until) > new Date();
   const dueLabel = isSnoozed
@@ -391,7 +410,11 @@ function TaskCard({ task, onEdit, onComplete, onSnooze, onArchive, onRestore, on
         <div className="task-actions">
           {!task.archived && isOpen && (
             <>
-              <button className="secondary-button small-button" onClick={() => onComplete(task.occurrence_id)}>
+              <button
+                className="secondary-button small-button"
+                onClick={() => onComplete(task.occurrence_id)}
+                disabled={!canComplete}
+              >
                 Complete
               </button>
               {(isMissed || dueNow) && (
