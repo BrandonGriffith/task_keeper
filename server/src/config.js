@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../');
 dotenv.config({ path: process.env.ENV_FILE || resolve(projectRoot, '.env') });
+process.env.REDIS_URL ??= 'redis://localhost:6379';
 
 export function assertRuntimeConfig() {
   const missing = ['MONGODB_URI', 'JWT_SECRET'].filter((name) => !process.env[name]);
