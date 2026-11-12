@@ -2,7 +2,9 @@ import { randomUUID } from 'node:crypto';
 import nodemailer from 'nodemailer';
 import webPush from 'web-push';
 import { emailConfigured, pushConfigured } from './config.js';
+import { buildDeliveryFailureUpdate, maxDeliveryAttempts } from './deliveryRetry.js';
 import { getDatabase, withMongoTransaction } from './db.js';
+import { sendPendingPushSubscriptions } from './pushDelivery.js';
 import {
   missedOccurrenceExpiresAt,
   nextOccurrence,
@@ -447,6 +449,26 @@ async function expireMissedOccurrences(changedUserIds) {
   }).sort({ missedExpiresAt: 1 }).limit(100).toArray();
 
   for (const occurrence of missed) {
+    const task = await database.collection('tasks').findOne({
+      _id: occurrence.taskId,
+      userId: occurrence.userId,
+    });
+    const expectedExpiry = task
+      ? missedOccurrenceExpiresAt(taskSchedule(task), occurrence.dueAt)
+      : occurrence.missedExpiresAt;
+    if (expectedExpiry > now) {
+      await occurrences.updateOne(
+        {
+          _id: occurrence._id,
+          status: 'missed',
+          supersededAt: { $exists: false },
+          missedExpiresAt: occurrence.missedExpiresAt,
+        },
+        { $set: { missedExpiresAt: expectedExpiry } },
+      );
+      continue;
+    }
+
     const expired = await occurrences.updateOne(
       {
         _id: occurrence._id,
@@ -457,12 +479,7 @@ async function expireMissedOccurrences(changedUserIds) {
       { $set: { supersededAt: now, snoozedUntil: null } },
     );
     if (expired.modifiedCount) {
-      const task = await database.collection('tasks').findOne({
-        _id: occurrence.taskId,
-        userId: occurrence.userId,
-        archived: false,
-      });
-      if (task) {
+      if (task && !task.archived) {
         const next = nextOccurrence(taskSchedule(task), occurrence.dueAt);
         const inserted = await insertOccurrence(task, next.dueAt, next.dateAdjusted);
         await insertScheduleAdjustment(task, inserted.occurrence, inserted.created);
@@ -504,23 +521,44 @@ async function sendDelivery(delivery) {
   if (!pushConfigured()) throw new Error('Browser push VAPID keys are not configured');
   const subscriptions = await database.collection('pushSubscriptions')
     .find({ userId: delivery.userId }).toArray();
-  if (!subscriptions.length) throw new Error('No browser push subscription is registered');
+  const deliveredSubscriptionIds = delivery.deliveredSubscriptionIds ?? [];
+  if (!subscriptions.length && !deliveredSubscriptionIds.length) {
+    throw new Error('No browser push subscription is registered');
+  }
   webPush.setVapidDetails(
     process.env.VAPID_SUBJECT || 'mailto:admin@example.com',
     process.env.VAPID_PUBLIC_KEY,
     process.env.VAPID_PRIVATE_KEY,
   );
   const payload = JSON.stringify({ title: delivery.title, body: delivery.body, url: '/' });
-  for (const subscription of subscriptions) {
-    try {
-      await webPush.sendNotification(subscription.subscription, payload);
-    } catch (error) {
-      if (error.statusCode === 404 || error.statusCode === 410) {
-        await database.collection('pushSubscriptions').deleteOne({ _id: subscription._id });
+  await sendPendingPushSubscriptions({
+    subscriptions,
+    deliveredSubscriptionIds,
+    send: async (subscription) => {
+      try {
+        await webPush.sendNotification(subscription.subscription, payload);
+        return true;
+      } catch (error) {
+        if (error.statusCode === 404 || error.statusCode === 410) {
+          await database.collection('pushSubscriptions').deleteOne({ _id: subscription._id });
+          return false;
+        }
+        throw error;
       }
-      throw error;
-    }
-  }
+    },
+    markDelivered: async (subscriptionId) => {
+      const result = await database.collection('notificationDeliveries').updateOne(
+        { _id: delivery._id, status: 'sending' },
+        {
+          $addToSet: { deliveredSubscriptionIds: subscriptionId },
+          $set: { updatedAt: new Date() },
+        },
+      );
+      if (!result.matchedCount) {
+        throw new Error(`Notification delivery ${delivery._id} is no longer being processed`);
+      }
+    },
+  });
 }
 
 async function processDeliveryOutbox() {
@@ -528,11 +566,21 @@ async function processDeliveryOutbox() {
   const collection = database.collection('notificationDeliveries');
   const now = new Date();
   const staleSendingBefore = new Date(now.getTime() - 5 * 60_000);
+  const configuredChannels = [
+    ...(emailConfigured() ? ['email'] : []),
+    ...(pushConfigured() ? ['system'] : []),
+  ];
   const deliveries = await collection.find({
     $or: [
       {
         status: { $in: ['pending', 'failed'] },
-        attempts: { $lt: 5 },
+        attempts: { $lt: maxDeliveryAttempts },
+        retryAfter: { $lte: now },
+      },
+      {
+        status: 'waiting_for_configuration',
+        channel: { $in: configuredChannels },
+        attempts: { $lt: maxDeliveryAttempts },
         retryAfter: { $lte: now },
       },
       { status: 'sending', updatedAt: { $lt: staleSendingBefore } },
@@ -545,8 +593,8 @@ async function processDeliveryOutbox() {
       ? { _id: delivery._id, status: 'sending', updatedAt: { $lt: staleSendingBefore } }
       : {
         _id: delivery._id,
-        status: { $in: ['pending', 'failed'] },
-        attempts: { $lt: 5 },
+        status: { $in: ['pending', 'failed', 'waiting_for_configuration'] },
+        attempts: { $lt: maxDeliveryAttempts },
         retryAfter: { $lte: now },
       };
     const claimed = await collection.findOneAndUpdate(
@@ -576,15 +624,11 @@ async function processDeliveryOutbox() {
       }
       await collection.updateOne(
         { _id: claimed._id, status: 'sending' },
-        {
-          $set: {
-            status: missingConfiguration ? 'pending' : 'failed',
-            retryAfter: new Date(Date.now() + (missingConfiguration ? 5 : 1) * 60_000),
-            lastError: message.slice(0, 1000),
-            updatedAt: new Date(),
-          },
-          ...(missingConfiguration ? { $inc: { attempts: -1 } } : {}),
-        },
+        buildDeliveryFailureUpdate({
+          attempts: claimed.attempts,
+          errorMessage: message,
+          missingConfiguration,
+        }),
       );
     }
   }

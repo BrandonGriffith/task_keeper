@@ -4,6 +4,7 @@ import app from './app.js';
 import { assertRuntimeConfig } from './config.js';
 import { closeDatabase, connectToDatabase } from './db.js';
 import { closeRedis, connectToRedis } from './redis.js';
+import { runCleanupSteps } from './shutdown.js';
 import { startScheduler, stopScheduler } from './scheduler.js';
 
 assertRuntimeConfig();
@@ -50,9 +51,20 @@ async function shutdown(signal) {
     if (connectionAttempt) {
       await connectionAttempt.catch(() => {});
     }
-    await closeRedis();
-    if (redisConnectionAttempt) await redisConnectionAttempt;
-    await closeDatabase();
+    const cleanupSteps = [
+      { name: 'Redis', run: closeRedis },
+      ...(redisConnectionAttempt
+        ? [{ name: 'Redis connection', run: () => redisConnectionAttempt }]
+        : []),
+      { name: 'MongoDB', run: closeDatabase },
+    ];
+    const cleanupSucceeded = await runCleanupSteps(
+      cleanupSteps,
+      (resource, cleanupError) => {
+        console.error(`Failed to close ${resource} cleanly`, cleanupError);
+      },
+    );
+    if (!cleanupSucceeded) process.exitCode = 1;
   });
 }
 
