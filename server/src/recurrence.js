@@ -29,6 +29,12 @@ export function localDateParts(instant, timeZone) {
   return { year: values.year, month: values.month, day: values.day };
 }
 
+export function occurrenceDayHasArrived(dueAt, timeZone, now = new Date()) {
+  const dueDate = dateString(localDateParts(new Date(dueAt), timeZone));
+  const today = dateString(localDateParts(now, timeZone));
+  return dueDate <= today;
+}
+
 function localDateTimeParts(instant, timeZone) {
   const values = Object.fromEntries(
     formatterFor(timeZone)
