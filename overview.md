@@ -25,7 +25,7 @@ The application is written in JavaScript and Node.js. It consists of a React bro
 
 - Node.js 20.19 or newer and npm.
 - A MongoDB replica set, either MongoDB Atlas or a local replica-set deployment. The application uses multi-document transactions.
-- Redis is optional; when configured it shares authentication rate limits across API instances and caches per-user task lists, history, notifications, and notification settings for up to 10 seconds.
+- Redis is optional; when available it shares authentication rate limits across API instances and caches per-user task lists, history, notifications, and notification settings for up to 10 seconds.
 - React 19 and Vite 6 for the browser client.
 - Express 5 for the API.
 - MongoDB Node.js driver 7 for persistence.
@@ -128,6 +128,7 @@ The root package uses npm workspaces to coordinate the client and server:
 │   └── package.json
 ├── .gitignore
 ├── AGENTS.md
+├── compose.redis.yml
 ├── package.json
 ├── package-lock.json
 ├── README.md
@@ -314,7 +315,7 @@ Create a private `.env` file in the project root; `.env` is local configuration 
 | `PORT` | `3001` | API port |
 | `NODE_ENV` | unset | `production` enables secure-only session cookies |
 | `ENV_FILE` | project `.env` | Optional environment file location |
-| `REDIS_URL` | unset | Optional Redis connection URL for shared authentication rate limits and short-lived API read caching |
+| `REDIS_URL` | `redis://localhost:6379` | Redis connection URL for shared authentication rate limits and short-lived API read caching; leave it empty to disable Redis, or use process-local limits and uncached MongoDB reads when Redis is unavailable |
 
 ### Optional email settings
 
@@ -333,12 +334,25 @@ Create a private `.env` file in the project root; `.env` is local configuration 
 3. Copy the Node.js driver URI from Atlas.
 4. Create a private `.env` file; set `MONGODB_URI`, `MONGODB_DATABASE`, and a long random `JWT_SECRET`.
 5. URL-encode any reserved characters in the database username or password used in the connection URI.
-6. Install dependencies and start the app:
+6. Keep the private `.env` file from step 4; do not commit or share its contents. The local Redis default is `redis://localhost:6379`; no Redis setting needs to be added to `.env` unless you want to use another Redis server.
 
-   ```powershell
+7. Install dependencies, start Redis, and run the app. In WSL:
+
+   ```sh
    npm install
+   docker compose -f compose.redis.yml up -d
    npm run dev
    ```
+
+   In Windows PowerShell, use `npm.cmd`:
+
+   ```powershell
+   npm.cmd install
+   docker compose -f compose.redis.yml up -d
+   npm.cmd run dev
+   ```
+
+   If Docker reports permission denied from WSL, run the Compose command with `sudo`.
 
 The frontend runs at `http://localhost:5173` and the API at `http://localhost:3001`.
 
