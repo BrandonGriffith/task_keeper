@@ -8,6 +8,7 @@ A personal-first recurring task manager built with JavaScript, React, Node.js/Ex
 - [Configure MongoDB Atlas](#configure-mongodb-atlas)
 - [Run in development](#run-in-development)
 - [Build and run in production](#build-and-run-in-production)
+- [Automated tests](#automated-tests)
 - [Working with AI agents](#working-with-ai-agents)
 - [Features](#features)
 - [Environment variables](#environment-variables)
@@ -84,6 +85,16 @@ NODE_ENV=production npm start
 
 The client build is written to the repository-root `build/` folder, which is ignored by Git. Generate it in the deployment pipeline or deploy it as a build artifact alongside the server; a source checkout by itself does not include the build. Configure `MONGODB_URI` and `JWT_SECRET` through the server environment or a secret manager. Serve the app over HTTPS so production session cookies work securely.
 
+## Automated tests
+
+Run the server regression tests from the repository root:
+
+```sh
+npm test
+```
+
+The suite uses Node.js's built-in test runner and does not require a MongoDB connection.
+
 ## Working with AI agents
 
 [AGENTS.md](./AGENTS.md) summarizes commands, conventions, UI rules, and pitfalls for AI coding agents such as Codex or Copilot.
@@ -102,7 +113,7 @@ The repository-shared [task_keeper control skill](./.github/skills/task-keeper-c
 - Yearly tasks reject February 29 and invalid calendar dates.
 - Completion, 30-minute snoozes, missed occurrences, repeat reminders every 10 minutes while a missed occurrence remains open (pausing during snooze), and automatic advancement when the next recurrence day begins. Misses remain in history and their notifications are retained. Also includes paginated history, archive, and restore.
 - In-app reminders appear in the Notifications view and as a toast while signed in (checked every 15 seconds). The browser tab title shows the unread notification count. After permission is granted, native browser alerts appear for due-task reminders while task_keeper is open; this does not require VAPID keys. Background Web Push and email delivery are server-side integrations and their settings are not exposed in the current UI.
-- MongoDB-backed notification delivery outbox with retries for email and browser push.
+- MongoDB-backed notification delivery outbox with explicit waiting for missing email/push configuration, exponential-backoff retries for delivery failures, and per-subscription progress tracking for push.
 - Permanent deletion of archived tasks, history entries, and notifications.
 - Clear history removes all completed/missed entries and their linked notifications and pending deliveries; clear notifications removes all notifications and their pending channel deliveries.
 - Responsive layout with dark mode as the default for new visitors and a saved light/dark theme switch on the sign-in, sign-up, and signed-in pages.
@@ -135,6 +146,6 @@ Optional push settings: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJ
 npx web-push generate-vapid-keys
 ```
 
-Foreground browser alerts require notification permission, a service worker, and In-app reminders enabled. Background push requires HTTPS (except localhost), user permission, a service worker, a browser subscription, and server VAPID configuration. Email and background push remain queued for retry when their server configuration is incomplete; in-app reminders continue to work.
+Foreground browser alerts require notification permission, a service worker, and In-app reminders enabled. Background push requires HTTPS (except localhost), user permission, a service worker, a browser subscription, and server VAPID configuration. Email and background push wait for missing server configuration and resume when it is available; delivery failures use bounded retries. In-app reminders continue to work.
 
 See [overview.md](./overview.md) for detailed architecture, data model, API routes, dependencies, and scheduler behavior.

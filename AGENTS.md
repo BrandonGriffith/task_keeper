@@ -13,6 +13,7 @@ A personal recurring-task manager (daily, weekly, monthly, yearly) with missed-t
 | Install | `npm install` |
 | Run everything (API :3001 + web :5173) | `npm run dev` |
 | Production build | `npm run build` |
+| Run automated tests | `npm test` |
 | Run production server (after build, with `NODE_ENV=production`) | `npm start` |
 | Start local Redis (optional) | `docker compose -f compose.redis.yml up -d` |
 
@@ -34,6 +35,9 @@ Redis defaults to `redis://localhost:6379`. Local development can start it with 
 - `server/src/tasks.js`: task/occurrence routes and lifecycle (create, edit, snooze, complete, archive, delete).
 - `server/src/scheduler.js`: 15-second tick that creates occurrences, marks missed, and creates and sends notifications.
 - `server/src/recurrence.js`: timezone-aware next-due calculation.
+- `server/src/deliveryRetry.js` and `server/src/pushDelivery.js`: notification delivery retry state and push progress tracking.
+- `server/src/shutdown.js`: resilient ordered cleanup of services during shutdown.
+- `server/test/`: focused Node.js regression tests.
 - `server/src/notifications.js`: in-app notifications, preferences, push subscriptions.
 - `client/src/App.jsx`: the whole UI (auth, tasks, history, notifications, theme switch).
 - `client/src/styles.css`: all styling, with CSS-variable light and dark themes.
@@ -56,8 +60,7 @@ Redis defaults to `redis://localhost:6379`. Local development can start it with 
 
 ## Verification notes
 
-- Run `npm run build` for client build validation; use the browser-control skill for safe, user-visible workflow checks.
-- There is no automated test script in the root or workspace package manifests; run focused checks for the changed behavior.
+- Run `npm test` for the server regression suite and `npm run build` for client build validation; use the browser-control skill for safe, user-visible workflow checks.
 - Editing server files restarts the API (`node --watch`); wait for "API listening" before checking API behavior.
 - Preserve key flows: register/login, create tasks of all four frequencies, edit after snooze or missed (no stale "snoozed until" or "missed occurrence"), repeated 30-minute snoozes, complete, clear history and notifications, and delete individual history/notifications/archived tasks.
 

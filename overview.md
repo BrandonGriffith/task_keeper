@@ -75,7 +75,7 @@ A task is the recurring schedule; an occurrence is one scheduled instance. Occur
 - New occurrences start as `pending`.
 - When a due time passes without completion or an active snooze, the scheduler marks the occurrence `missed`, records `missedAt`, and creates a reminder. A pending occurrence already snoozed is skipped until the snooze expires.
 - Open missed occurrences generate another reminder every 10 minutes from the last reminder. Snoozing pauses repeats until the snooze expires; the snooze-expiry reminder restarts the interval. The scheduler checks every 15 seconds, so reminders can arrive just after the 10-minute boundary. Completing the occurrence stops reminders.
-- A missed occurrence remains in history and its notifications remain available, but it stops blocking the active task and repeat reminders when the next recurrence's local calendar day begins. For example, a daily miss is superseded at local midnight before the next day's due time. Legacy missed occurrences receive the same expiry during scheduler processing.
+- A missed occurrence remains in history and its notifications remain available, but it stops blocking the active task and repeat reminders when the next recurrence's local calendar day begins. For example, a daily miss is superseded at local midnight before the next day's due time. Before superseding an expired miss, the scheduler recalculates its boundary from the task's current schedule and timezone and corrects an early persisted expiry; this also protects restart recovery from stale timestamps. Legacy missed occurrences receive the same expiry during scheduler processing.
 - Pending or missed occurrences can be completed. Completing an occurrence advances the task to its next open occurrence.
 - Each snooze click adds 30 minutes to the later of the existing snooze deadline or the current time. The task card shows the updated deadline, and the scheduler creates a follow-up reminder when it arrives.
 - Editing a task supersedes any already-due open occurrence and clears its snooze, while retaining the missed occurrence in history. Future occurrences for the old schedule are removed and replaced with the edited schedule.
@@ -90,9 +90,9 @@ The application supports three notification channels:
 2. **Email:** Optional delivery through SMTP using Nodemailer.
 3. **Background browser push:** Optional Web Push delivery using VAPID, the browser Push API, and a service worker. This can deliver while the app tab is closed.
 
-Email and background push are optional server-side integrations; their settings are not exposed in the current UI yet. If configuration is missing, delivery stays queued for a later retry and in-app reminders remain available. Foreground browser alerts require notification permission, a service worker, and In-app reminders enabled. Background browser push requires HTTPS (localhost is allowed), browser notification permission, a service worker, a registered subscription, and configured VAPID keys. Push endpoints are validated against supported secure browser notification services.
+Email and background push are optional server-side integrations; their settings are not exposed in the current UI yet. Missing configuration leaves delivery waiting until it is available; other delivery failures retry with backoff. In-app reminders remain available either way. Foreground browser alerts require notification permission, a service worker, and In-app reminders enabled. Background browser push requires HTTPS (localhost is allowed), browser notification permission, a service worker, a registered subscription, and configured VAPID keys. Push endpoints are validated against supported secure browser notification services.
 
-External notification deliveries use separate MongoDB documents with `pending`, `sending`, `sent`, or `failed` state, retry time, attempt count, and last error. Expired subscriptions that return HTTP 404 or 410 are removed.
+External notification deliveries use separate MongoDB documents with `pending`, `waiting_for_configuration`, `sending`, `sent`, or `failed` state, retry time, attempt count, and last error. Missing email or push configuration leaves a delivery waiting without consuming an attempt; it becomes eligible again when that channel is configured. Other delivery failures use exponential backoff and stop after five failed attempts; stale `sending` records are reclaimed after five minutes. Push deliveries record each successfully served subscription so a later retry skips it. A process crash between provider acceptance and recording success can still result in a duplicate. Expired subscriptions that return HTTP 404 or 410 are removed.
 
 ## Architecture and repository layout
 
@@ -116,15 +116,23 @@ The root package uses npm workspaces to coordinate the client and server:
 │   │   ├── app.js
 │   │   ├── auth.js
 │   │   ├── config.js
+│   │   ├── deliveryRetry.js
 │   │   ├── db.js
 │   │   ├── errors.js
 │   │   ├── index.js
 │   │   ├── notifications.js
+│   │   ├── pushDelivery.js
 │   │   ├── recurrence.js
 │   │   ├── redis.js
 │   │   ├── scheduler.js
+│   │   ├── shutdown.js
 │   │   ├── tasks.js
 │   │   └── validation.js
+│   ├── test/
+│   │   ├── deliveryRetry.test.js
+│   │   ├── pushDelivery.test.js
+│   │   ├── recurrence.test.js
+│   │   └── shutdown.test.js
 │   └── package.json
 ├── .gitignore
 ├── AGENTS.md
@@ -166,7 +174,10 @@ The root package uses npm workspaces to coordinate the client and server:
 - `server/src/redis.js` owns the optional Redis client lifecycle, shared authentication rate-limit store, and short-lived per-user read cache. Authentication limits fall back to process-local memory; cache failures bypass Redis and use MongoDB.
 - `server/src/tasks.js` implements task/occurrence APIs, response mapping, user ownership checks, and lifecycle updates.
 - `server/src/recurrence.js` calculates timezone-aware first and subsequent occurrences.
-- `server/src/scheduler.js` fills the occurrence schedule, creates initial, snooze-expiry, and 10-minute repeat reminders for open missed occurrences, and processes email/push delivery documents.
+- `server/src/scheduler.js` fills the occurrence schedule, creates initial, snooze-expiry, and 10-minute repeat reminders for open missed occurrences, revalidates missed-expiry timestamps, and processes email/push delivery documents.
+- `server/src/deliveryRetry.js` calculates notification delivery retry states and delays; `server/src/pushDelivery.js` tracks successful push subscriptions across retries.
+- `server/src/shutdown.js` runs ordered shutdown cleanup steps without skipping later resources after a failure.
+- `server/test/` contains the Node.js built-in regression test suite (`npm test`).
 - `server/src/notifications.js` implements notification queries, read state, preferences, and push subscriptions.
 - `server/src/validation.js` validates task input and calendar constraints.
 - `server/src/config.js` loads `.env` and validates required/optional runtime configuration.
@@ -257,7 +268,7 @@ Each scheduler tick:
 1. Creates occurrences for active tasks that lack an open future occurrence, maintaining a future occurrence and a rolling seven-day schedule horizon.
 2. Marks due, unnotified occurrences as missed and creates reminders plus delivery records for enabled external channels.
 3. Creates a reminder when a snooze expires. If the occurrence remains missed and open, it gets another reminder every 10 minutes; snoozing pauses that interval and expiry starts it over.
-4. Supersedes a missed occurrence when the next recurrence's local calendar day begins and ensures that next scheduled occurrence exists. The missed history entry and its notifications remain, but the old occurrence no longer blocks the current task or receives repeat reminders. Expiry timestamps let the scheduler batch only eligible misses; existing records are assigned their expiry as they are scanned.
+4. Supersedes a missed occurrence when the next recurrence's local calendar day begins and ensures that next scheduled occurrence exists. The missed history entry and its notifications remain, but the old occurrence no longer blocks the current task or receives repeat reminders. Expiry timestamps let the scheduler batch only eligible misses; missing or prematurely expired timestamps are reconciled against the task's current schedule and timezone before superseding.
 5. Claims eligible email/push delivery records, dispatches them, and records success or retry state.
 
 The API process must remain running for scheduler reminders to be processed. When the app is open and signed in, the browser checks for in-app reminders every 15 seconds. Email and push delivery requires the corresponding server configuration and enabled user preference. Unique task/occurrence and notification/delivery indexes protect their respective records; reminder creation is coordinated by the scheduler lease. Local deployments need replica-set mode for transactions; MongoDB Atlas clusters provide replica-set transaction support.
@@ -378,9 +389,10 @@ Run from the repository root:
 | --- | --- |
 | `npm run dev` | Starts the API in Node watch mode and the Vite development server |
 | `npm run build` | Builds the React client into the repository-root `build/` folder |
+| `npm test` | Runs the server regression tests with Node.js's built-in test runner |
 | `npm start` | Starts the API, MongoDB client, and reminder scheduler |
 
-Run `npm run build` for client build validation. Use the browser-control skill for safe, user-visible workflow checks. Verify API behavior with the running app when the change affects server routes or scheduling.
+Run `npm test` for the server regression suite and `npm run build` for client build validation. Use the browser-control skill for safe, user-visible workflow checks. Verify API behavior with the running app when the change affects server routes or scheduling.
 
 On Windows, if PowerShell blocks the `npm.ps1` shim, run commands as `npm.cmd run dev`, `npm.cmd run build`, and similar.
 
