@@ -17,7 +17,8 @@ const missedReminderRepeatMs = 10 * 60 * 1000;
 const occurrenceHorizonMs = 7 * 24 * 60 * 60 * 1000;
 const schedulerLeaseMs = 2 * 60 * 1000;
 let timer;
-let tickRunning = false;
+let activeTick;
+let schedulerStopping = false;
 
 function taskSchedule(task) {
   return {
@@ -696,25 +697,32 @@ export async function runSchedulerTick() {
 }
 
 async function safeTick() {
-  if (tickRunning) return;
-  tickRunning = true;
+  if (schedulerStopping || activeTick) return;
+  activeTick = (async () => {
+    try {
+      await runSchedulerTick();
+    } catch (error) {
+      console.error('Reminder scheduler tick failed', error);
+    }
+  })();
   try {
-    await runSchedulerTick();
-  } catch (error) {
-    console.error('Reminder scheduler tick failed', error);
+    await activeTick;
   } finally {
-    tickRunning = false;
+    activeTick = undefined;
   }
 }
 
 export function startScheduler() {
   if (timer) return;
+  schedulerStopping = false;
   void safeTick();
   timer = setInterval(safeTick, intervalMs);
   timer.unref();
 }
 
-export function stopScheduler() {
+export async function stopScheduler() {
+  schedulerStopping = true;
   if (timer) clearInterval(timer);
   timer = undefined;
+  await activeTick;
 }

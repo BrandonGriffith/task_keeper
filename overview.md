@@ -65,8 +65,8 @@ Additional scheduling behavior:
 - Recurrences are calculated in the schedule's IANA timezone so the local due hour remains stable across daylight-saving transitions. If a scheduled local time falls in a spring-forward gap, it shifts forward by the gap (for example, 02:30 becomes 03:30).
 - Users can create, edit, complete, snooze, archive, and restore tasks.
 - Editing a task supersedes already-due open occurrences, clears their snoozes, and replaces future occurrences for the old schedule while preserving completed history.
-- Archiving hides a task from the active list without deleting its occurrences or history. Archived tasks can be permanently deleted, along with their occurrences, linked notifications, and pending notification deliveries.
-- Individual history entries and in-app notifications can be deleted from their respective views, and each view can be cleared in full. Clearing history also deletes notifications and pending deliveries linked to those occurrences; clearing notifications removes all of the user's notifications and pending deliveries.
+- Archiving hides a task from the active list without deleting its occurrences or history. Archived tasks can be permanently deleted, along with their occurrences, linked notifications, and delivery records.
+- Individual history entries and in-app notifications can be deleted from their respective views, and each view can be cleared in full. Clearing history also deletes notifications and delivery records linked to those occurrences; clearing notifications removes all of the user's notifications and associated delivery records.
 
 ### Occurrences, missed work, and history
 
@@ -167,7 +167,7 @@ The root package uses npm workspaces to coordinate the client and server:
 
 ### Server
 
-- `server/src/index.js` checks runtime configuration, opens the HTTP listener, retries the MongoDB connection until available, starts the scheduler after MongoDB connects, and closes services on shutdown.
+- `server/src/index.js` checks runtime configuration, opens the HTTP listener, retries the MongoDB connection until available, starts the scheduler after MongoDB connects, and drains an active scheduler tick before closing services on shutdown.
 - `server/src/app.js` configures Express, JSON parsing, cookies, the database health check, API routers, and production static-file serving.
 - `server/src/auth.js` implements registration/login/logout/session lookup, password hashing, signed cookies, authentication middleware, and rate limiting.
 - `server/src/db.js` owns the MongoDB client lifecycle, selected database, and startup index creation.
@@ -241,7 +241,7 @@ All endpoints use the `/api` prefix and return JSON except where noted. In devel
 | `DELETE` | `/api/tasks/:id/permanent` | Permanently deletes an archived task and its related records |
 | `POST` | `/api/tasks/:id/restore` | Restores an archived task |
 | `GET` | `/api/tasks/history?limit=100&offset=0` | Lists occurrence history; limit is 1–200 |
-| `DELETE` | `/api/tasks/history` | Clears all history occurrences and their linked notifications and pending deliveries |
+| `DELETE` | `/api/tasks/history` | Clears all history occurrences and their linked notifications and delivery records |
 | `DELETE` | `/api/tasks/history/:id` | Deletes a history occurrence and its linked notifications |
 | `POST` | `/api/tasks/occurrences/:id/complete` | Completes an open occurrence |
 | `POST` | `/api/tasks/occurrences/:id/snooze` | Snoozes an open occurrence for 30 minutes |
@@ -251,9 +251,9 @@ All endpoints use the `/api` prefix and return JSON except where noted. In devel
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/api/notifications` | Lists the most recent 100 in-app notifications |
-| `DELETE` | `/api/notifications` | Clears all in-app notifications and their pending channel deliveries |
+| `DELETE` | `/api/notifications` | Clears all in-app notifications and their associated delivery records |
 | `PATCH` | `/api/notifications/:id/read` | Marks a notification as read |
-| `DELETE` | `/api/notifications/:id` | Deletes a notification and its pending channel deliveries |
+| `DELETE` | `/api/notifications/:id` | Deletes a notification and its associated delivery records |
 | `GET` | `/api/settings/notifications` | Reads preferences and channel availability |
 | `PUT` | `/api/settings/notifications` | Updates notification preferences |
 | `POST` | `/api/push-subscriptions` | Registers or updates a browser subscription |

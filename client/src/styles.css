@@ -297,7 +297,7 @@ h3,
   height: 100vh;
   flex-direction: column;
   padding: 27px 18px 18px;
-  border-right: 1px solid #e8e9e3;
+  border-right: 1px solid var(--line);
   background: var(--sidebar);
 }
 
@@ -439,7 +439,7 @@ h3,
   align-items: center;
   justify-content: space-between;
   padding: 0 clamp(22px, 5vw, 66px);
-  border-bottom: 1px solid #e8e9e3;
+  border-bottom: 1px solid var(--line);
   background: color-mix(in srgb, var(--paper) 82%, transparent);
 }
 
@@ -1050,7 +1050,7 @@ h3,
 }
 
 .timezone-note strong {
-  color: #5d7164;
+  color: var(--secondary-ink);
   font-weight: 600;
 }
 
@@ -1099,7 +1099,7 @@ h3,
 .loading-screen {
   align-content: center;
   gap: 14px;
-  color: #718078;
+  color: var(--muted);
   font-size: 0.85rem;
 }
 

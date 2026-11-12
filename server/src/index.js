@@ -40,9 +40,10 @@ server.listen(port, () => {
 });
 
 async function shutdown(signal) {
+  if (shutdownRequested) return;
   console.log(`${signal} received; shutting down`);
   shutdownRequested = true;
-  stopScheduler();
+  const schedulerStopped = stopScheduler();
   server.close(async (error) => {
     if (error) {
       console.error('Failed to close HTTP server cleanly', error);
@@ -52,6 +53,7 @@ async function shutdown(signal) {
       await connectionAttempt.catch(() => {});
     }
     const cleanupSteps = [
+      { name: 'Scheduler', run: () => schedulerStopped },
       { name: 'Redis', run: closeRedis },
       ...(redisConnectionAttempt
         ? [{ name: 'Redis connection', run: () => redisConnectionAttempt }]

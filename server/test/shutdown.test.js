@@ -23,3 +23,24 @@ test('successful cleanup reports success', async () => {
 
   assert.equal(cleanupSucceeded, true);
 });
+
+test('shutdown waits for scheduler cleanup before closing the database', async () => {
+  const calls = [];
+  let releaseScheduler;
+  const schedulerStopped = new Promise((resolve) => {
+    releaseScheduler = resolve;
+  });
+  const cleanup = runCleanupSteps([
+    { name: 'Scheduler', run: async () => {
+      calls.push('Scheduler');
+      await schedulerStopped;
+    } },
+    { name: 'MongoDB', run: async () => calls.push('MongoDB') },
+  ], () => assert.fail('Unexpected cleanup error'));
+
+  await Promise.resolve();
+  assert.deepEqual(calls, ['Scheduler']);
+  releaseScheduler();
+  assert.equal(await cleanup, true);
+  assert.deepEqual(calls, ['Scheduler', 'MongoDB']);
+});
