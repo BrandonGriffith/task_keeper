@@ -76,7 +76,7 @@ A task is the recurring schedule; an occurrence is one scheduled instance. Occur
 - When a due time passes without completion or an active snooze, the scheduler marks the occurrence `missed`, records `missedAt`, and creates a reminder. A pending occurrence already snoozed is skipped until the snooze expires.
 - Open missed occurrences generate another reminder every 10 minutes from the last reminder. Snoozing pauses repeats until the snooze expires; the snooze-expiry reminder restarts the interval. The scheduler checks every 15 seconds, so reminders can arrive just after the 10-minute boundary. Completing the occurrence stops reminders.
 - A missed occurrence remains in history and its notifications remain available, but it stops blocking the active task and repeat reminders when the next recurrence's local calendar day begins. For example, a daily miss is superseded at local midnight before the next day's due time. Before superseding an expired miss, the scheduler recalculates its boundary from the task's current schedule and timezone and corrects an early persisted expiry; this also protects restart recovery from stale timestamps. Legacy missed occurrences receive the same expiry during scheduler processing.
-- Pending or missed occurrences can be completed. Completing an occurrence advances the task to its next open occurrence.
+- Pending or missed occurrences can be completed on or after their due day in the occurrence's timezone, but not early. Completing an occurrence advances the task to its next open occurrence.
 - Each snooze click adds 30 minutes to the later of the existing snooze deadline or the current time. The task card shows the updated deadline, and the scheduler creates a follow-up reminder when it arrives.
 - Editing a task supersedes any already-due open occurrence and clears its snooze, while retaining the missed occurrence in history. Future occurrences for the old schedule are removed and replaced with the edited schedule.
 - The history view lists completed and missed occurrences newest first and supports offset pagination.
@@ -206,7 +206,7 @@ The server uses the official MongoDB Node.js driver directly. Documents use UUID
 - Unique normalized user email.
 - Task lookup by owner, archive state, and next due time.
 - Global scheduler lookup by archive state and next due time.
-- Unique occurrence per task and due instant.
+- At most one open occurrence per task and due instant; completed history may coexist with a newly scheduled occurrence at the same instant after a task edit.
 - Occurrence lookup by task/status/due time; by user/history ordering; by status/due/notification state; by status/missed-expiry time; and by status/snooze time.
 - Notification lookup by owner and creation time.
 - Unique occurrence/kind notification for records linked through `occurrenceId` (schedule-adjustment notifications). Task reminders use `sourceOccurrenceId` and are coordinated by the scheduler lease instead.
