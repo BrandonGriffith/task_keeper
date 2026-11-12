@@ -2,7 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { Router } from 'express';
 import { getDatabase, withMongoTransaction } from './db.js';
 import { HttpError } from './errors.js';
-import { firstOccurrence, nextOccurrence } from './recurrence.js';
+import {
+  firstOccurrence,
+  nextOccurrence,
+  occurrenceDayHasArrived,
+} from './recurrence.js';
 import { getCachedJsonResponse, invalidateUserReadCache } from './redis.js';
 import { ensureNextOpenOccurrence } from './scheduler.js';
 import { parseTaskInput } from './validation.js';
@@ -124,12 +128,20 @@ async function insertOccurrence(task, dueAt, dateAdjusted, session) {
   };
   try {
     const result = await occurrences.updateOne(
-      { taskId: task._id, dueAt },
+      {
+        taskId: task._id,
+        dueAt,
+        status: { $in: ['pending', 'missed'] },
+      },
       { $setOnInsert: document },
       { upsert: true, ...(session ? { session } : {}) },
     );
     const occurrence = await occurrences.findOne(
-      { taskId: task._id, dueAt },
+      {
+        taskId: task._id,
+        dueAt,
+        status: { $in: ['pending', 'missed'] },
+      },
       session ? { session } : {},
     );
     return { occurrence, created: result.upsertedCount === 1 };
@@ -137,7 +149,11 @@ async function insertOccurrence(task, dueAt, dateAdjusted, session) {
     if (session) throw error;
     if (error.code !== 11000) throw error;
     return {
-      occurrence: await occurrences.findOne({ taskId: task._id, dueAt }),
+      occurrence: await occurrences.findOne({
+        taskId: task._id,
+        dueAt,
+        status: { $in: ['pending', 'missed'] },
+      }),
       created: false,
     };
   }
@@ -410,24 +426,40 @@ router.post('/occurrences/:id/complete', async (request, response) => {
   const occurrences = getDatabase().collection('occurrences');
   const now = new Date();
   const updated = await withMongoTransaction(async (session) => {
-    const occurrence = await occurrences.findOneAndUpdate(
-      {
-        _id: request.params.id,
-        userId: request.user.id,
-        status: { $in: ['pending', 'missed'] },
-        supersededAt: { $exists: false },
-      },
+    const filter = {
+      _id: request.params.id,
+      userId: request.user.id,
+      status: { $in: ['pending', 'missed'] },
+      supersededAt: { $exists: false },
+    };
+    const occurrence = await occurrences.findOne(filter, { session });
+    if (!occurrence) throw new HttpError(404, 'Open task occurrence not found');
+    let timezone = occurrence.timezone;
+    if (!timezone) {
+      const task = await getDatabase().collection('tasks').findOne(
+        { _id: occurrence.taskId, userId: request.user.id },
+        { projection: { timezone: 1 }, session },
+      );
+      timezone = task?.timezone;
+    }
+    if (!timezone) throw new HttpError(409, 'Task occurrence has no schedule timezone');
+    if (!occurrenceDayHasArrived(occurrence.dueAt, timezone, now)) {
+      throw new HttpError(409, 'Task occurrence cannot be completed before its due day');
+    }
+
+    const completed = await occurrences.findOneAndUpdate(
+      filter,
       { $set: { status: 'completed', completedAt: now, snoozedUntil: null } },
       { returnDocument: 'after', session },
     );
-    if (!occurrence) throw new HttpError(404, 'Open task occurrence not found');
+    if (!completed) throw new HttpError(404, 'Open task occurrence not found');
     const task = await getDatabase().collection('tasks').findOne({
-      _id: occurrence.taskId,
+      _id: completed.taskId,
       userId: request.user.id,
       archived: false,
     }, { session });
     if (task) await ensureNextOpenOccurrence(task, session);
-    return occurrence;
+    return completed;
   });
   await invalidateUserReadCache(request.user.id);
   return response.json({
