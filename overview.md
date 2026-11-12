@@ -75,7 +75,7 @@ A task is the recurring schedule; an occurrence is one scheduled instance. Occur
 - New occurrences start as `pending`.
 - When a due time passes without completion or an active snooze, the scheduler marks the occurrence `missed`, records `missedAt`, and creates a reminder. A pending occurrence already snoozed is skipped until the snooze expires.
 - Open missed occurrences generate another reminder every 10 minutes from the last reminder. Snoozing pauses repeats until the snooze expires; the snooze-expiry reminder restarts the interval. The scheduler checks every 15 seconds, so reminders can arrive just after the 10-minute boundary. Completing the occurrence stops reminders.
-- A missed occurrence remains in history and its notifications remain available, but it stops blocking the active task and repeat reminders when the next recurrence's local calendar day begins. For example, a daily miss is superseded at local midnight before the next day's due time. Before superseding an expired miss, the scheduler recalculates its boundary from the task's current schedule and timezone and corrects an early persisted expiry; this also protects restart recovery from stale timestamps. Legacy missed occurrences receive the same expiry during scheduler processing.
+- A missed occurrence remains in history and its notifications remain available, but it stops blocking the active task and repeat reminders when its own local due day ends. The scheduler recalculates the boundary from the task's current schedule and timezone, correcting missing or stale persisted expiries before superseding; this also protects restart recovery from outdated timestamps.
 - Pending or missed occurrences can be completed on or after their due day in the occurrence's timezone, but not early. Completing an occurrence advances the task to its next open occurrence.
 - Each snooze click adds 30 minutes to the later of the existing snooze deadline or the current time. The task card shows the updated deadline, and the scheduler creates a follow-up reminder when it arrives.
 - Editing a task supersedes any already-due open occurrence and clears its snooze, while retaining the missed occurrence in history. Future occurrences for the old schedule are removed and replaced with the edited schedule.
@@ -193,7 +193,7 @@ The server uses the official MongoDB Node.js driver directly. Documents use UUID
 | --- | --- |
 | `users` | Email, password hash, user ID, creation time, and embedded notification preferences |
 | `tasks` | User-owned recurrence definitions, timezone, next due instant, and archive state |
-| `occurrences` | Scheduled task instances, task-title snapshot, status, due time, completion/missed/superseded timestamps, snooze state, and last-reminder time |
+| `occurrences` | Scheduled task instances, task-title snapshot, status, due time, completion/missed/superseded and missed-expiry timestamps, snooze state, and last-reminder time |
 | `notifications` | In-app notifications and read state; optionally linked to an occurrence |
 | `pushSubscriptions` | Browser subscriptions keyed by endpoint and owner |
 | `notificationDeliveries` | Retryable per-channel email/push outbox records |
@@ -268,7 +268,7 @@ Each scheduler tick:
 1. Creates occurrences for active tasks that lack an open future occurrence, maintaining a future occurrence and a rolling seven-day schedule horizon.
 2. Marks due, unnotified occurrences as missed and creates reminders plus delivery records for enabled external channels.
 3. Creates a reminder when a snooze expires. If the occurrence remains missed and open, it gets another reminder every 10 minutes; snoozing pauses that interval and expiry starts it over.
-4. Supersedes a missed occurrence when the next recurrence's local calendar day begins and ensures that next scheduled occurrence exists. The missed history entry and its notifications remain, but the old occurrence no longer blocks the current task or receives repeat reminders. Expiry timestamps let the scheduler batch only eligible misses; missing or prematurely expired timestamps are reconciled against the task's current schedule and timezone before superseding.
+4. Supersedes a missed occurrence when its own local due day ends and ensures that the next scheduled occurrence exists. The missed history entry and its notifications remain, but the old occurrence no longer blocks the current task or receives repeat reminders. Before superseding, the scheduler reconciles missing or stale expiry timestamps against the task's current schedule and timezone.
 5. Claims eligible email/push delivery records, dispatches them, and records success or retry state.
 
 The API process must remain running for scheduler reminders to be processed. When the app is open and signed in, the browser checks for in-app reminders every 15 seconds. Email and push delivery requires the corresponding server configuration and enabled user preference. Unique task/occurrence and notification/delivery indexes protect their respective records; reminder creation is coordinated by the scheduler lease. Local deployments need replica-set mode for transactions; MongoDB Atlas clusters provide replica-set transaction support.

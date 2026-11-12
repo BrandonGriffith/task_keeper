@@ -62,10 +62,11 @@ Redis defaults to `redis://localhost:6379`. Local development can start it with 
 
 - Run `npm test` for the server regression suite and `npm run build` for client build validation; use the browser-control skill for safe, user-visible workflow checks.
 - Editing server files restarts the API (`node --watch`); wait for "API listening" before checking API behavior.
-- Preserve key flows: register/login, create tasks of all four frequencies, edit after snooze or missed (no stale "snoozed until" or "missed occurrence"), repeated 30-minute snoozes, complete, clear history and notifications, and delete individual history/notifications/archived tasks.
+- Preserve key flows: register/login, create tasks of all four frequencies, edit after snooze or missed (no stale "snoozed until" or "missed occurrence"), keep missed tasks actionable until completion or the end of their scheduled local due day, repeated 30-minute snoozes, complete, clear history and notifications, and delete individual history/notifications/archived tasks.
 
 ## Pitfalls
 
 - Editing a task must supersede open occurrences and clear snoozes (previous bugs: stale snooze time and ghost missed occurrences).
+- A missed occurrence stays actionable until it is completed or its scheduled local due day ends; recalculate stale expiry timestamps before advancing to the next occurrence.
 - Monthly day 31 clamps to the month's last day and creates a schedule-adjustment notification. Yearly Feb 29 is rejected.
 - Clean up test data through the UI when safe. Do not permanently delete account data unless explicitly authorized; if the UI cannot remove a disposable test account or remaining data, disclose it. Never clean up through direct database access.
