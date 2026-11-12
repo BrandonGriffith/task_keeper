@@ -191,9 +191,8 @@ export function nextOccurrence(config, previousDueAt) {
 }
 
 export function missedOccurrenceExpiresAt(config, dueAt) {
-  const nextDueAt = nextOccurrence(config, dueAt).dueAt;
-  const nextDate = dateString(localDateParts(nextDueAt, config.timezone));
-  return toUtcInstant(nextDate, '00:00', config.timezone);
+  const dueDate = dateString(localDateParts(new Date(dueAt), config.timezone));
+  return toUtcInstant(addDays(dueDate, 1), '00:00', config.timezone);
 }
 
 export function occurrenceDateAdjusted(config, dueAt) {

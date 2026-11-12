@@ -55,6 +55,50 @@ test('a daily missed occurrence expires at midnight in its schedule timezone', (
   assert.ok(expiresAt > beforeLocalMidnight);
 });
 
+test('missed weekly, monthly, and yearly occurrences expire after their own due day', () => {
+  const cases = [
+    {
+      task: {
+        frequency: 'weekly',
+        timezone: 'UTC',
+        dueTime: '09:00',
+        weeklyDay: 2,
+      },
+      dueAt: '2026-11-10T09:00:00.000Z',
+      expectedExpiry: '2026-11-11T00:00:00.000Z',
+    },
+    {
+      task: {
+        frequency: 'monthly',
+        timezone: 'UTC',
+        dueTime: '09:00',
+        monthlyDay: 31,
+      },
+      dueAt: '2026-01-31T09:00:00.000Z',
+      expectedExpiry: '2026-02-01T00:00:00.000Z',
+    },
+    {
+      task: {
+        frequency: 'yearly',
+        timezone: 'UTC',
+        dueTime: '09:00',
+        yearlyMonth: 11,
+        yearlyDay: 12,
+      },
+      dueAt: '2026-11-12T09:00:00.000Z',
+      expectedExpiry: '2026-11-13T00:00:00.000Z',
+    },
+  ];
+
+  for (const { task, dueAt, expectedExpiry } of cases) {
+    assert.equal(
+      missedOccurrenceExpiresAt(task, dueAt).toISOString(),
+      expectedExpiry,
+      `${task.frequency} occurrence should expire after its own due day`,
+    );
+  }
+});
+
 test('an occurrence cannot be completed before its local due day', () => {
   const dueAt = new Date('2026-11-12T16:59:00.000Z');
 
