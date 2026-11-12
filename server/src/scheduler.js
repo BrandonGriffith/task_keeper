@@ -59,13 +59,21 @@ async function insertOccurrence(task, dueAt, dateAdjusted, session) {
   };
   try {
     const result = await occurrences.updateOne(
-      { taskId: task._id, dueAt },
+      {
+        taskId: task._id,
+        dueAt,
+        status: { $in: ['pending', 'missed'] },
+      },
       { $setOnInsert: document },
       { upsert: true, ...(session ? { session } : {}) },
     );
     return {
       occurrence: await occurrences.findOne(
-        { taskId: task._id, dueAt },
+        {
+          taskId: task._id,
+          dueAt,
+          status: { $in: ['pending', 'missed'] },
+        },
         session ? { session } : {},
       ),
       created: result.upsertedCount === 1,
@@ -74,7 +82,11 @@ async function insertOccurrence(task, dueAt, dateAdjusted, session) {
     if (session) throw error;
     if (error.code !== 11000) throw error;
     return {
-      occurrence: await occurrences.findOne({ taskId: task._id, dueAt }),
+      occurrence: await occurrences.findOne({
+        taskId: task._id,
+        dueAt,
+        status: { $in: ['pending', 'missed'] },
+      }),
       created: false,
     };
   }
