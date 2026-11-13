@@ -146,6 +146,6 @@ Optional push settings: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJ
 npx web-push generate-vapid-keys
 ```
 
-Foreground browser alerts require notification permission, a service worker, and In-app reminders enabled. Background push requires HTTPS (except localhost), user permission, a service worker, a browser subscription, and server VAPID configuration. Email and background push wait for missing server configuration and resume when it is available; delivery failures use bounded retries. In-app reminders continue to work.
+Foreground browser alerts require notification permission, a service worker, and In-app reminders enabled. Background push requires HTTPS (except localhost), user permission, a service worker, a browser subscription, and server VAPID configuration. Email and background push wait for missing server configuration and resume when it is available; delivery failures use bounded retries. A push subscription endpoint registered to one account cannot be claimed by another. In-app reminders continue to work.
 
 See [overview.md](./overview.md) for detailed architecture, data model, API routes, dependencies, and scheduler behavior.
