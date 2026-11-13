@@ -56,6 +56,8 @@ If Docker reports permission denied from WSL, run the Compose command with `sudo
 
 The React frontend is served at `http://localhost:5173`. The Express API listens at `http://localhost:3001`, and Vite proxies `/api` requests to it.
 
+**WSL performance:** For faster installs and development startup, keep the checkout and its `node_modules` on the WSL Linux filesystem (for example, under `~/projects`) rather than under `/mnt/c`. Accessing many Node.js files across the Windows-mounted filesystem can slow startup. Keep Windows and WSL installs separate; do not share the same `node_modules` between them.
+
 **Network exposure:** The development Vite server is explicitly bound to `0.0.0.0`, and the API also listens on all interfaces by default. Other devices on the same network may be able to reach them. Use development mode only on a trusted network; use HTTPS and production configuration for deployments.
 
 The local servers start even when MongoDB Atlas cannot be reached and retry the database connection every five seconds. If Wi-Fi or internet access drops, the app remains open on localhost, but account and task data needs MongoDB and will be unavailable until the database connection returns.
