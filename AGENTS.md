@@ -11,11 +11,12 @@ A personal recurring-task manager (daily, weekly, monthly, yearly) with missed-t
 | Task | Command |
 | --- | --- |
 | Install | `npm install` |
-| Run everything (API :3001 + web :5173) | `npm run dev` |
+| Start Redis before running the app | `docker compose -f compose.redis.yml up -d` |
+| Run everything (API :3001 + web :5173), after starting Redis | `npm run dev` |
 | Production build | `npm run build` |
 | Run automated tests | `npm test` |
 | Run production server (after build, with `NODE_ENV=production`) | `npm start` |
-| Start local Redis (optional) | `docker compose -f compose.redis.yml up -d` |
+| Start local Redis | `docker compose -f compose.redis.yml up -d` |
 
 On Windows PowerShell, use `npm.cmd` if `npm.ps1` is blocked. PowerShell has no `&&`; chain with `;`.
 
@@ -29,6 +30,8 @@ For production, build the client first, set `NODE_ENV=production` in the server 
 4. Development Vite and API servers bind to all interfaces by default; use them only on a trusted network.
 
 Redis defaults to `redis://localhost:6379`. Local development can start it with the Compose file above; if Redis is unavailable, authentication limits fall back to process-local memory and cached reads go directly to MongoDB. Keep an existing `.env` file intact and never print its values.
+
+Before starting the local app with `npm run dev` (or `npm.cmd run dev` in PowerShell), always run `docker compose -f compose.redis.yml up -d` from the repository root.
 
 ## Where things live
 
