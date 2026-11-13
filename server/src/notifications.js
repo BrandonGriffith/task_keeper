@@ -34,6 +34,24 @@ export function isTrustedPushEndpoint(value) {
     && (!endpoint.port || endpoint.port === '443');
 }
 
+export async function upsertPushSubscription(collection, userId, subscription, now = new Date()) {
+  try {
+    await collection.updateOne(
+      { endpoint: subscription.endpoint, userId },
+      {
+        $set: { subscription },
+        $setOnInsert: { _id: randomUUID(), userId, createdAt: now },
+      },
+      { upsert: true },
+    );
+  } catch (error) {
+    if (error.code === 11000) {
+      throw new HttpError(409, 'This browser push subscription is already registered to another account');
+    }
+    throw error;
+  }
+}
+
 const subscriptionSchema = z.object({
   endpoint: z.string().url().max(2048).refine(isTrustedPushEndpoint, {
     message: 'Push endpoint must be a supported secure browser notification service',
@@ -176,14 +194,10 @@ router.put('/settings/notifications', async (request, response) => {
 router.post('/push-subscriptions', async (request, response) => {
   if (!pushConfigured()) throw new HttpError(503, 'Browser push is not configured on the server');
   const input = subscriptionSchema.parse(request.body);
-  const now = new Date();
-  await getDatabase().collection('pushSubscriptions').updateOne(
-    { endpoint: input.endpoint },
-    {
-      $set: { userId: request.user.id, subscription: input },
-      $setOnInsert: { _id: randomUUID(), createdAt: now },
-    },
-    { upsert: true },
+  await upsertPushSubscription(
+    getDatabase().collection('pushSubscriptions'),
+    request.user.id,
+    input,
   );
   return response.status(201).json({ subscribed: true });
 });
