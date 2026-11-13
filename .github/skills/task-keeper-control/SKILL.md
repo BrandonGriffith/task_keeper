@@ -13,8 +13,8 @@ Use the browser UI for requested task_keeper operations and frontend testing. Do
 
 1. Locate the task_keeper repository root; confirm it contains `package.json`. Read its `README.md` and `AGENTS.md` for current setup and safety notes. Do not assume the current working directory is the repository.
 2. Confirm browser-control tools are available and identify the user-provided origin or shared task_keeper tab. For local development, the usual frontend is `http://localhost:5173`, with API health at `http://localhost:3001/api/health`. If browser tools are unavailable, explain that UI testing cannot be performed; do not claim a browser test.
-3. If the local app is needed, check whether it is already running before starting it. From the repository root, use `npm.cmd run dev` in Windows PowerShell or `npm run dev` in other shells. Keep a process you start alive while using the app; do not stop an existing process you did not start.
-4. Wait for the frontend and API to start and verify the API health endpoint returns `{"status":"ok"}`. If the API is still starting, wait and check its logs/health again before attempting sign-in or registration.
+3. If the local app is needed, check whether it is already running before starting it. From the repository root, start Redis first with `docker compose -f compose.redis.yml up -d`, verify `docker compose -f compose.redis.yml exec -T redis redis-cli ping` returns `PONG`, then start the app with `npm.cmd run dev` in Windows PowerShell or `npm run dev` in other shells. Always run the Compose command before the dev command, even though Redis has runtime fallbacks. If Redis does not become ready, do not proceed as if startup succeeded; report the blocker. Keep a process you start alive while using the app; do not stop an existing process you did not start.
+4. Wait for startup and verify `http://localhost:3001/api/health` returns `{"status":"ok"}` before attempting sign-in or registration. The API can begin listening before MongoDB is connected, so an early health request may fail; retry until it succeeds. A loaded frontend or Vite HTTP 200 alone does not establish API/database readiness.
 5. If dependencies are missing, use the repository's lockfile and package-manager instructions to install them. If required configuration or database access is missing, report the blocker. Never read, print, or request secrets from `.env`; do not invent configuration values or credentials.
 6. Open or reuse the browser page, confirm the page title and origin, and read the current UI before acting. Determine whether someone is already signed in and inspect which view is open. Do not sign out an existing user unless requested.
 
@@ -51,6 +51,7 @@ Development Vite and API servers bind to all interfaces by default. Only start o
 ## Account workflows
 
 - Use the sign-in/create-account switch on the auth page as needed. Verify sign-in by checking the authenticated navigation/account state and expected tasks.
+- Registration signs the new account in automatically. If the requested check is specifically to log in, sign out only from the disposable account just created, then enter those same credentials once and verify the authenticated navigation and **Your routines** view. Do not repeat registration to test login.
 - To test login persistence, sign out through the UI, verify the auth form appears, reload and verify the signed-out state remains, then sign in through the UI and verify the expected account/tasks return.
 - Do not sign out an existing user merely to test authentication unless requested; use a designated test account.
 
@@ -69,7 +70,7 @@ Task schedules use the device timezone (not editable) and default new tasks to 1
 
 Use when asked to "test the frontend" without finer detail. Keep a short running log of each step and its observed result.
 
-1. Complete the first-run setup, then reach a designated test account (sign in, or register once with a unique `test-…@example.com`). Verify the **Your routines** heading.
+1. Complete the first-run setup, then reach a designated test account (sign in, or register once with a unique `test-…@example.com`). Registration verifies account creation and signs in automatically; if login itself is in scope, sign out from this disposable account and sign back in once. Verify the **Your routines** heading.
 2. Create one task per frequency with unique names; verify each card.
 3. Edit one task's title and notes; wait for `Task updated.` and the new title on the card.
 4. Create a daily task due 2–3 minutes from now. Wait for the scheduler (ticks every 15 seconds) to mark it missed, then verify a reminder in **Notifications** and **Snooze 30m** on the card. Open missed occurrences repeat reminders every 10 minutes; snoozing pauses repeats until the 30-minute snooze reminder, then the 10-minute interval restarts. Complete it, then verify **Completed late** in **History**.
