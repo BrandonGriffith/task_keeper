@@ -6,9 +6,10 @@
     "server"
   ],
   "scripts": {
-    "dev": "concurrently -k -n api,web \"node --watch --watch-preserve-output server/src/index.js\" \"vite client --host 0.0.0.0 --config client/vite.config.js\"",
+    "dev": "concurrently -k -n api,web \"node --watch --watch-preserve-output server/src/index.js\" \"vite client --config client/vite.config.js\"",
     "build": "npm run build --workspace client",
     "test": "npm run test --workspace server",
+    "docs:pdf": "node scripts/generate-architecture-pdf.mjs",
     "start": "npm run start --workspace server"
   },
   "devDependencies": {
