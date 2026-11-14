@@ -33,11 +33,14 @@ async function connectToDatabaseWithRetry() {
   }
 }
 
-server.listen(port, () => {
+function onListening() {
   console.log(`task_keeper API listening on http://localhost:${port}`);
   redisConnectionAttempt = connectToRedis();
   void connectToDatabaseWithRetry();
-});
+}
+
+if (process.env.HOST) server.listen(port, process.env.HOST, onListening);
+else server.listen(port, onListening);
 
 async function shutdown(signal) {
   if (shutdownRequested) return;
