@@ -324,6 +324,7 @@ Create a private `.env` file in the project root; `.env` is local configuration 
 | `MONGODB_DATABASE` | URI database name, otherwise `task_keeper` | Database to select |
 | `DB_POOL_MAX` | `10` | MongoDB maximum connection pool size |
 | `PORT` | `3001` | API port |
+| `HOST` | all interfaces | Optional bind host for the API and Vite development server; set to `127.0.0.1` to restrict local development to this machine |
 | `NODE_ENV` | unset | `production` enables secure-only session cookies |
 | `ENV_FILE` | project `.env` | Optional environment file location |
 | `REDIS_URL` | `redis://localhost:6379` | Redis connection URL for shared authentication rate limits and short-lived API read caching; leave it empty to disable Redis, or use process-local limits and uncached MongoDB reads when Redis is unavailable |
@@ -367,7 +368,13 @@ Create a private `.env` file in the project root; `.env` is local configuration 
 
 The frontend runs at `http://localhost:5173` and the API at `http://localhost:3001`.
 
-**Network exposure:** Vite is started with `--host 0.0.0.0`, and the Express listener does not specify a host, so both development servers bind beyond loopback. Treat development mode as reachable by other devices on the network and use it only on a trusted network.
+**Network exposure:** Both development servers bind to all interfaces by default, so development mode may be reachable by other devices on the network. Use it only on a trusted network. To restrict both servers to the local machine, set `HOST=127.0.0.1` before starting them:
+
+```sh
+HOST=127.0.0.1 npm run dev
+```
+
+In Windows PowerShell, use `$env:HOST = '127.0.0.1'` before `npm.cmd run dev`.
 
 The API begins listening before connecting to MongoDB and retries an unavailable database connection every five seconds. This keeps the local app available when Wi-Fi or internet access drops, but account and task operations still require the MongoDB database and resume when it is reachable again.
 
@@ -390,6 +397,7 @@ Run from the repository root:
 | `npm run dev` | Starts the API in Node watch mode and the Vite development server |
 | `npm run build` | Builds the React client into the repository-root `build/` folder |
 | `npm test` | Runs the server regression tests with Node.js's built-in test runner |
+| `npm run docs:pdf` | Regenerates the architecture and dependencies PDF from the current project manifests |
 | `npm start` | Starts the API, MongoDB client, and reminder scheduler |
 
 Run `npm test` for the server regression suite and `npm run build` for client build validation. Use the browser-control skill for safe, user-visible workflow checks. Verify API behavior with the running app when the change affects server routes or scheduling.
