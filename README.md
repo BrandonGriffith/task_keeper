@@ -58,7 +58,22 @@ The React frontend is served at `http://localhost:5173`. The Express API listens
 
 **WSL performance:** For faster installs and development startup, keep the checkout and its `node_modules` on the WSL Linux filesystem (for example, under `~/projects`) rather than under `/mnt/c`. Accessing many Node.js files across the Windows-mounted filesystem can slow startup. Keep Windows and WSL installs separate; do not share the same `node_modules` between them.
 
-**Network exposure:** The development Vite server is explicitly bound to `0.0.0.0`, and the API also listens on all interfaces by default. Other devices on the same network may be able to reach them. Use development mode only on a trusted network; use HTTPS and production configuration for deployments.
+**Network exposure:** By default, both development servers bind to all interfaces, so other devices on the same network may be able to reach them. Use development mode only on a trusted network; use HTTPS and production configuration for deployments.
+
+To keep both development servers reachable only from the same machine, set `HOST` to `127.0.0.1`. In WSL or another POSIX shell, run:
+
+```sh
+HOST=127.0.0.1 npm run dev
+```
+
+In Windows PowerShell, run:
+
+```powershell
+$env:HOST = '127.0.0.1'
+npm.cmd run dev
+```
+
+When `HOST` is unset, the all-interface behavior is preserved.
 
 The local servers start even when MongoDB Atlas cannot be reached and retry the database connection every five seconds. If Wi-Fi or internet access drops, the app remains open on localhost, but account and task data needs MongoDB and will be unavailable until the database connection returns.
 
@@ -96,6 +111,12 @@ npm test
 ```
 
 The suite uses Node.js's built-in test runner and does not require a MongoDB connection.
+
+Regenerate the architecture and dependencies PDF from the current source and package manifests:
+
+```sh
+npm run docs:pdf
+```
 
 ## Working with AI agents
 
@@ -136,6 +157,7 @@ General:
 | `MONGODB_DATABASE` | URI database name, or `task_keeper` | Database name to use. |
 | `DB_POOL_MAX` | `10` | MongoDB maximum connection-pool size. |
 | `PORT` | `3001` | API listen port. |
+| `HOST` | all interfaces | Optional bind host for the API and Vite development server; set to `127.0.0.1` to restrict local development to this machine. |
 | `NODE_ENV` | unset | Set to `production` to enable secure-only session cookies. |
 | `ENV_FILE` | project `.env` | Optional path to the environment file. |
 | `REDIS_URL` | `redis://localhost:6379` | Redis connection URL for shared authentication rate limits and short-lived API read caching. Set a different URL for hosted Redis, or leave it empty to disable Redis. If Redis is unavailable, the API uses its local fallbacks. |
