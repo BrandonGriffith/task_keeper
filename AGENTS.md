@@ -27,7 +27,7 @@ For production, build the client first, set `NODE_ENV=production` in the server 
 1. `.env` must exist with `MONGODB_URI` and a long random `JWT_SECRET`; never print, log, commit, or paste it.
 2. Check whether the app is already running: `curl http://localhost:3001/api/health` should return `{"status":"ok"}`.
 3. Run `git status` and `git log` to see the current state. Commit meaningful changes.
-4. Development Vite and API servers bind to all interfaces by default; use them only on a trusted network.
+4. Development Vite and API servers bind to all interfaces by default; use them only on a trusted network. Set `HOST=127.0.0.1` before starting them to restrict both servers to the local machine. In PowerShell, use `$env:HOST='127.0.0.1'; npm.cmd run dev`.
 
 Redis defaults to `redis://localhost:6379`. Local development can start it with the Compose file above; if Redis is unavailable, authentication limits fall back to process-local memory and cached reads go directly to MongoDB. Keep an existing `.env` file intact and never print its values.
 
