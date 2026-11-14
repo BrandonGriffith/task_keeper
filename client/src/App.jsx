@@ -3,6 +3,19 @@ import { api } from './api.js';
 
 const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const authRetryDelaysMs = [250, 500, 1000, 2000, 4000];
+const dueFormatters = new Map();
+const dateKeyFormatters = new Map();
+const notificationDateFormatter = new Intl.DateTimeFormat(undefined, {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+});
+
+function formatterFor(cache, timezone, options, locale) {
+  if (!cache.has(timezone)) {
+    cache.set(timezone, new Intl.DateTimeFormat(locale, { ...options, timeZone: timezone }));
+  }
+  return cache.get(timezone);
+}
 
 function localTimezone() {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -17,7 +30,7 @@ function frequencyLabel(task) {
 
 function formatDue(instant, timezone) {
   if (!instant) return 'No open occurrence';
-  return new Intl.DateTimeFormat(undefined, {
+  return formatterFor(dueFormatters, timezone, {
     timeZone: timezone,
     dateStyle: 'medium',
     timeStyle: 'short',
@@ -26,17 +39,29 @@ function formatDue(instant, timezone) {
 
 function dateKeyInTimezone(instant, timezone) {
   const values = Object.fromEntries(
-    new Intl.DateTimeFormat('en', {
-      timeZone: timezone,
+    formatterFor(dateKeyFormatters, timezone, {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
-    })
+    }, 'en')
       .formatToParts(instant)
       .filter((part) => part.type !== 'literal')
       .map((part) => [part.type, Number(part.value)]),
   );
   return values.year * 10_000 + values.month * 100 + values.day;
+}
+
+function sameNotifications(current, next) {
+  return current.length === next.length && current.every((notification, index) => {
+    const candidate = next[index];
+    return notification.id === candidate.id
+      && notification.occurrence_id === candidate.occurrence_id
+      && notification.kind === candidate.kind
+      && notification.title === candidate.title
+      && notification.body === candidate.body
+      && notification.read_at === candidate.read_at
+      && notification.created_at === candidate.created_at;
+  });
 }
 
 function ThemeFooter({ darkMode, onThemeChange }) {
@@ -521,6 +546,7 @@ export default function App() {
   const [pageError, setPageError] = useState('');
   const [toast, setToast] = useState('');
   const [showArchived, setShowArchived] = useState(false);
+  const [loadingArchived, setLoadingArchived] = useState(false);
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [settingsNotice, setSettingsNotice] = useState('');
   const [clearingHistory, setClearingHistory] = useState(false);
@@ -538,12 +564,11 @@ export default function App() {
   }, [darkMode]);
 
   const refreshData = useCallback(async () => {
-    const [taskData, historyData, notificationData, settingsData, archivedData] = await Promise.all([
+    const [taskData, historyData, notificationData, settingsData] = await Promise.all([
       api('/tasks'),
       api('/tasks/history?limit=100&offset=0'),
       api('/notifications'),
       api('/settings/notifications'),
-      api('/tasks?archived=true'),
     ]);
     setTasks(taskData.tasks);
     setHistory(historyData.occurrences);
@@ -551,7 +576,6 @@ export default function App() {
     notificationIds.current = new Set(notificationData.notifications.map((notification) => notification.id));
     setNotifications(notificationData.notifications);
     setSettings(settingsData);
-    setArchivedTasks(archivedData.tasks.map((task) => ({ ...task, archived: true })));
   }, []);
 
   useEffect(() => {
@@ -611,7 +635,9 @@ export default function App() {
           (notification) => !notificationIds.current.has(notification.id) && !notification.read_at,
         );
         notificationIds.current = new Set(result.notifications.map((notification) => notification.id));
-        setNotifications(result.notifications);
+        setNotifications((current) => (
+          sameNotifications(current, result.notifications) ? current : result.notifications
+        ));
         if (unseen.length) {
           await refreshData();
           if (!active) return;
@@ -738,6 +764,7 @@ export default function App() {
   async function restoreTask(id) {
     try {
       await api(`/tasks/${id}/restore`, { method: 'POST', body: '{}' });
+      setArchivedTasks((items) => items.filter((task) => task.id !== id));
       await refreshData();
       notify('Task restored.');
     } catch (error) {
@@ -751,6 +778,7 @@ export default function App() {
     }
     try {
       await api(`/tasks/${task.id}/permanent`, { method: 'DELETE' });
+      setArchivedTasks((items) => items.filter((item) => item.id !== task.id));
       await refreshData();
       notify('Archived task and its history deleted.');
     } catch (error) {
@@ -889,6 +917,19 @@ export default function App() {
     }
   }
 
+  async function openArchivedTasks() {
+    setLoadingArchived(true);
+    try {
+      const result = await api('/tasks?archived=true');
+      setArchivedTasks(result.tasks.map((task) => ({ ...task, archived: true })));
+      setShowArchived(true);
+    } catch (error) {
+      setPageError(error.message);
+    } finally {
+      setLoadingArchived(false);
+    }
+  }
+
   async function signOut() {
     try {
       await api('/auth/logout', { method: 'POST', body: '{}' });
@@ -986,8 +1027,15 @@ export default function App() {
                   {showArchived ? 'Past schedules stay here, with their history intact.' : 'A steady rhythm, one task at a time.'}
                 </p>
               </div>
-              <button className="text-button archive-toggle" onClick={() => setShowArchived(!showArchived)}>
-                {showArchived ? '← Back to active tasks' : 'View archived'}
+              <button
+                className="text-button archive-toggle"
+                disabled={loadingArchived}
+                onClick={() => {
+                  if (showArchived) setShowArchived(false);
+                  else void openArchivedTasks();
+                }}
+              >
+                {loadingArchived ? 'Loading archived tasks…' : showArchived ? '← Back to active tasks' : 'View archived'}
               </button>
             </div>
             {visibleTasks.length ? (
@@ -1115,7 +1163,7 @@ export default function App() {
                       <span className="notification-copy">
                         <strong>{notification.title}</strong>
                         <span>{notification.body}</span>
-                        <small>{new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(notification.created_at))}</small>
+                        <small>{notificationDateFormatter.format(new Date(notification.created_at))}</small>
                       </span>
                       {!notification.read_at && <span className="unread-label">New</span>}
                     </button>
