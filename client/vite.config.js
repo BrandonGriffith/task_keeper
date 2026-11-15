@@ -10,7 +10,16 @@ export default defineConfig({
   server: {
     host: process.env.HOST || '0.0.0.0',
     proxy: {
-      '/api': 'http://localhost:3001',
+      '/api': {
+        target: 'http://localhost:3001',
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyRequest, request) => {
+            if (request.headers.host) {
+              proxyRequest.setHeader('x-forwarded-host', request.headers.host);
+            }
+          });
+        },
+      },
     },
   },
 });
