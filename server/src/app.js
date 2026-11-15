@@ -5,8 +5,9 @@ import cookieParser from 'cookie-parser';
 import express from 'express';
 import authRouter, { requireAuth } from './auth.js';
 import { getDatabase } from './db.js';
-import { errorHandler } from './errors.js';
+import { errorHandler, HttpError } from './errors.js';
 import notificationsRouter from './notifications.js';
+import { hasTrustedMutationOrigin } from './requestSecurity.js';
 import tasksRouter from './tasks.js';
 
 const app = express();
@@ -26,6 +27,12 @@ app.use((_request, response, next) => {
 });
 app.use(express.json({ limit: '32kb' }));
 app.use(cookieParser());
+app.use((request, _response, next) => {
+  if (!hasTrustedMutationOrigin(request.method, request.get('origin'), request.get('host'))) {
+    return next(new HttpError(403, 'Request origin is not allowed'));
+  }
+  return next();
+});
 
 app.get('/api/health', async (_request, response) => {
   await getDatabase().command({ ping: 1 });
