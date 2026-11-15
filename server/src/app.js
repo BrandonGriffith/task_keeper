@@ -28,7 +28,12 @@ app.use((_request, response, next) => {
 app.use(express.json({ limit: '32kb' }));
 app.use(cookieParser());
 app.use((request, _response, next) => {
-  if (!hasTrustedMutationOrigin(request.method, request.get('origin'), request.get('host'))) {
+  if (!hasTrustedMutationOrigin(
+    request.method,
+    request.get('origin'),
+    request.get('host'),
+    request.get('x-forwarded-host'),
+  )) {
     return next(new HttpError(403, 'Request origin is not allowed'));
   }
   return next();
