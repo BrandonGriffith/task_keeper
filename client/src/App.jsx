@@ -802,14 +802,14 @@ export default function App() {
   }
 
   async function clearHistory() {
-    if (!window.confirm('Clear all completed and missed history entries? Notifications linked to those entries will also be deleted. This cannot be undone.')) {
+    if (!window.confirm('Clear completed and past missed history entries? Active missed tasks and their notifications will be kept. This cannot be undone.')) {
       return;
     }
     setClearingHistory(true);
     try {
       await api('/tasks/history', { method: 'DELETE' });
       await refreshData();
-      notify('History cleared.');
+      notify('Completed and past missed history cleared.');
     } catch (error) {
       setPageError(error.message);
     } finally {
