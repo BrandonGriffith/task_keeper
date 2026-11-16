@@ -108,6 +108,16 @@ async function deleteOccurrenceNotifications(database, userId, occurrenceIds, se
   await notifications.deleteMany({ _id: { $in: notificationIds }, userId }, { session });
 }
 
+export function historyClearFilter(userId) {
+  return {
+    userId,
+    $or: [
+      { status: 'completed' },
+      { status: 'missed', supersededAt: { $exists: true } },
+    ],
+  };
+}
+
 async function insertOccurrence(task, dueAt, dateAdjusted, session) {
   const occurrences = getDatabase().collection('occurrences');
   const document = {
@@ -294,10 +304,7 @@ router.patch('/:id', async (request, response) => {
 
 router.delete('/history', async (request, response) => {
   const database = getDatabase();
-  const historyFilter = {
-    userId: request.user.id,
-    status: { $in: ['completed', 'missed'] },
-  };
+  const historyFilter = historyClearFilter(request.user.id);
   await withMongoTransaction(async (session) => {
     const history = await database.collection('occurrences').find(
       historyFilter,
