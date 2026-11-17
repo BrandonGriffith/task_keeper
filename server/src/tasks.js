@@ -4,6 +4,7 @@ import { getDatabase, withMongoTransaction } from './db.js';
 import { HttpError } from './errors.js';
 import {
   firstOccurrence,
+  missedOccurrenceExpiresAt,
   nextOccurrence,
   occurrenceDayHasArrived,
 } from './recurrence.js';
@@ -116,6 +117,16 @@ export function historyClearFilter(userId) {
       { status: 'missed', supersededAt: { $exists: true } },
     ],
   };
+}
+
+export function occurrenceCanBeActedOn(occurrence, timezone, now = new Date()) {
+  if (!occurrenceDayHasArrived(occurrence.dueAt, timezone, now)) return false;
+  if (occurrence.status === 'missed') {
+    const expiresAt = occurrence.missedExpiresAt
+      ?? missedOccurrenceExpiresAt({ timezone }, occurrence.dueAt);
+    if (expiresAt <= now) return false;
+  }
+  return true;
 }
 
 async function insertOccurrence(task, dueAt, dateAdjusted, session) {
@@ -453,6 +464,16 @@ router.post('/occurrences/:id/complete', async (request, response) => {
     if (!occurrenceDayHasArrived(occurrence.dueAt, timezone, now)) {
       throw new HttpError(409, 'Task occurrence cannot be completed before its due day');
     }
+    if (occurrence.status === 'missed') {
+      const expiresAt = occurrence.missedExpiresAt
+        ?? missedOccurrenceExpiresAt({ timezone }, occurrence.dueAt);
+      if (expiresAt <= now) throw new HttpError(409, 'This missed task is no longer actionable');
+      if (occurrence.missedExpiresAt) {
+        filter.missedExpiresAt = occurrence.missedExpiresAt;
+      } else {
+        filter.missedExpiresAt = { $exists: false };
+      }
+    }
 
     const completed = await occurrences.findOneAndUpdate(
       filter,
@@ -483,25 +504,59 @@ router.post('/occurrences/:id/complete', async (request, response) => {
 });
 
 router.post('/occurrences/:id/snooze', async (request, response) => {
-  const updated = await getDatabase().collection('occurrences').findOneAndUpdate(
-    {
+  const now = new Date();
+  const updated = await withMongoTransaction(async (session) => {
+    const occurrences = getDatabase().collection('occurrences');
+    const filter = {
       _id: request.params.id,
       userId: request.user.id,
       status: { $in: ['pending', 'missed'] },
       supersededAt: { $exists: false },
-    },
-    [{
-      $set: {
-        snoozedUntil: {
-          $add: [
-            { $max: [{ $ifNull: ['$snoozedUntil', '$$NOW'] }, '$$NOW'] },
-            30 * 60_000,
-          ],
+    };
+    const occurrence = await occurrences.findOne(filter, { session });
+    if (!occurrence) throw new HttpError(404, 'Open task occurrence not found');
+    if (occurrence.status === 'pending' && occurrence.dueAt > now) {
+      throw new HttpError(409, 'Task occurrence cannot be snoozed before it is due');
+    }
+    let timezone = occurrence.timezone;
+    if (!timezone) {
+      const task = await getDatabase().collection('tasks').findOne(
+        { _id: occurrence.taskId, userId: request.user.id },
+        { projection: { timezone: 1 }, session },
+      );
+      timezone = task?.timezone;
+    }
+    if (!timezone) throw new HttpError(409, 'Task occurrence has no schedule timezone');
+    if (!occurrenceCanBeActedOn(occurrence, timezone, now)) {
+      throw new HttpError(
+        409,
+        occurrence.status === 'missed'
+          ? 'This missed task is no longer actionable'
+          : 'Task occurrence cannot be snoozed before its due day',
+      );
+    }
+    if (occurrence.status === 'missed') {
+      if (occurrence.missedExpiresAt) {
+        filter.missedExpiresAt = occurrence.missedExpiresAt;
+      } else {
+        filter.missedExpiresAt = { $exists: false };
+      }
+    }
+    return occurrences.findOneAndUpdate(
+      filter,
+      [{
+        $set: {
+          snoozedUntil: {
+            $add: [
+              { $max: [{ $ifNull: ['$snoozedUntil', '$$NOW'] }, '$$NOW'] },
+              30 * 60_000,
+            ],
+          },
         },
-      },
-    }],
-    { returnDocument: 'after' },
-  );
+      }],
+      { returnDocument: 'after', session },
+    );
+  });
   if (!updated) throw new HttpError(404, 'Open task occurrence not found');
   await invalidateUserReadCache(request.user.id);
   return response.json({
