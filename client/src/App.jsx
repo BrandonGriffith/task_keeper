@@ -1102,6 +1102,14 @@ export default function App() {
                       <div className="history-main">
                         <h3>{item.title}</h3>
                         <p>Due {formatDue(item.due_at, item.timezone)}</p>
+                        {item.snooze_history.map((snoozedAt, index) => (
+                          <p key={`${snoozedAt}-${index}`}>
+                            Snoozed {formatDue(snoozedAt, item.timezone)}
+                          </p>
+                        ))}
+                        {item.completed_at && (
+                          <p>Completed {formatDue(item.completed_at, item.timezone)}</p>
+                        )}
                       </div>
                       <span className={`history-status ${item.status === 'missed' ? 'missed-text' : ''}`}>
                         {item.status === 'completed'
