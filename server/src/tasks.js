@@ -40,7 +40,7 @@ function toApiTask(task, occurrence = null) {
   };
 }
 
-function toApiOccurrence(occurrence, timezone) {
+export function toApiOccurrence(occurrence, timezone) {
   return {
     id: occurrence._id,
     task_id: occurrence.taskId,
@@ -51,6 +51,7 @@ function toApiOccurrence(occurrence, timezone) {
     date_adjusted: occurrence.dateAdjusted,
     missed_at: occurrence.missedAt ?? null,
     completed_at: occurrence.completedAt ?? null,
+    snooze_history: occurrence.snoozeHistory ?? [],
   };
 }
 
@@ -158,6 +159,7 @@ async function insertOccurrence(task, dueAt, dateAdjusted, session) {
     initialNotifiedAt: null,
     lastReminderAt: null,
     snoozedUntil: null,
+    snoozeHistory: [],
     createdAt: new Date(),
   };
   try {
@@ -580,16 +582,24 @@ router.post('/occurrences/:id/snooze', async (request, response) => {
     }
     return occurrences.findOneAndUpdate(
       filter,
-      [{
-        $set: {
-          snoozedUntil: {
-            $add: [
-              { $max: [{ $ifNull: ['$snoozedUntil', '$$NOW'] }, '$$NOW'] },
-              30 * 60_000,
-            ],
+      [
+        {
+          $set: {
+            snoozedUntil: {
+              $add: [
+                { $max: [{ $ifNull: ['$snoozedUntil', '$$NOW'] }, '$$NOW'] },
+                30 * 60_000,
+              ],
+            },
+            snoozeHistory: {
+              $concatArrays: [
+                { $ifNull: ['$snoozeHistory', []] },
+                [now],
+              ],
+            },
           },
         },
-      }],
+      ],
       { returnDocument: 'after', session },
     );
   });
