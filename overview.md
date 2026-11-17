@@ -67,7 +67,7 @@ Additional scheduling behavior:
 - Users can create, edit, complete, snooze, archive, and restore tasks.
 - Editing a task supersedes already-due open occurrences, clears their snoozes, and replaces future occurrences for the old schedule while preserving completed history.
 - Archiving hides a task from the active list without deleting its occurrences or history. Archived tasks can be permanently deleted, along with their occurrences, linked notifications, and delivery records.
-- Individual history entries and in-app notifications can be deleted from their respective views, and each view can be cleared in full. Clearing history also deletes notifications and delivery records linked to those occurrences; clearing notifications removes all of the user's notifications and associated delivery records.
+- Individual history entries and in-app notifications can be deleted from their respective views, and each view can be cleared in full. Deleting a history entry never deletes an active task occurrence: a still-active missed occurrence is hidden from history, while completed and superseded occurrences are removed. Linked notifications and delivery records are deleted; clearing notifications removes all of the user's notifications and associated delivery records.
 
 ### Occurrences, missed work, and history
 
@@ -80,7 +80,7 @@ A task is the recurring schedule; an occurrence is one scheduled instance. Occur
 - Pending or missed occurrences can be completed on or after their due day in the occurrence's timezone, but not early. Completing an occurrence advances the task to its next open occurrence.
 - Each snooze click adds 30 minutes to the later of the existing snooze deadline or the current time. The task card shows the updated deadline, and the scheduler creates a follow-up reminder when it arrives.
 - Editing a task supersedes any already-due open occurrence and clears its snooze, while retaining the missed occurrence in history. Future occurrences for the old schedule are removed and replaced with the edited schedule.
-- The history view lists completed and missed occurrences newest first and supports offset pagination.
+- The history view lists completed and missed occurrences newest first and supports offset pagination. Deleting an active missed entry hides it from history without changing the occurrence that keeps its task actionable.
 - Archived tasks remain in the database, so their history remains accessible.
 
 ### Notifications
