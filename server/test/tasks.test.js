@@ -1,14 +1,28 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { historyClearFilter, occurrenceCanBeActedOn } from '../src/tasks.js';
+import {
+  historyClearFilter,
+  historyDeletionPlan,
+  occurrenceCanBeActedOn,
+} from '../src/tasks.js';
 
-test('clearing history keeps unsuperseded missed occurrences actionable', () => {
+test('history reads and clears exclude entries already deleted from history', () => {
   assert.deepEqual(historyClearFilter('user-1'), {
     userId: 'user-1',
-    $or: [
-      { status: 'completed' },
-      { status: 'missed', supersededAt: { $exists: true } },
-    ],
+    status: { $in: ['completed', 'missed'] },
+    historyDeletedAt: { $exists: false },
+  });
+});
+
+test('deleting history hides active missed occurrences without deleting them', () => {
+  assert.deepEqual(historyDeletionPlan([
+    { _id: 'active-missed', status: 'missed' },
+    { _id: 'past-missed', status: 'missed', supersededAt: new Date() },
+    { _id: 'closed-missed', status: 'missed', supersededAt: null },
+    { _id: 'completed', status: 'completed' },
+  ]), {
+    retainedOccurrenceIds: ['active-missed'],
+    deletedOccurrenceIds: ['past-missed', 'closed-missed', 'completed'],
   });
 });
 
