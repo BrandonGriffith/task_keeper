@@ -112,10 +112,23 @@ async function deleteOccurrenceNotifications(database, userId, occurrenceIds, se
 export function historyClearFilter(userId) {
   return {
     userId,
-    $or: [
-      { status: 'completed' },
-      { status: 'missed', supersededAt: { $exists: true } },
-    ],
+    status: { $in: ['completed', 'missed'] },
+    historyDeletedAt: { $exists: false },
+  };
+}
+
+export function historyDeletionPlan(occurrences) {
+  const retainedOccurrenceIds = occurrences
+    .filter((occurrence) => (
+      occurrence.status === 'missed' && !Object.hasOwn(occurrence, 'supersededAt')
+    ))
+    .map((occurrence) => occurrence._id);
+  const retainedIds = new Set(retainedOccurrenceIds);
+  return {
+    retainedOccurrenceIds,
+    deletedOccurrenceIds: occurrences
+      .filter((occurrence) => !retainedIds.has(occurrence._id))
+      .map((occurrence) => occurrence._id),
   };
 }
 
@@ -319,15 +332,30 @@ router.delete('/history', async (request, response) => {
   await withMongoTransaction(async (session) => {
     const history = await database.collection('occurrences').find(
       historyFilter,
-      { projection: { _id: 1 }, session },
+      { projection: { _id: 1, status: 1, supersededAt: 1 }, session },
     ).toArray();
+    const occurrenceIds = history.map((occurrence) => occurrence._id);
+    const { retainedOccurrenceIds, deletedOccurrenceIds } = historyDeletionPlan(history);
     await deleteOccurrenceNotifications(
       database,
       request.user.id,
-      history.map((occurrence) => occurrence._id),
+      occurrenceIds,
       session,
     );
-    await database.collection('occurrences').deleteMany(historyFilter, { session });
+    const occurrences = database.collection('occurrences');
+    if (retainedOccurrenceIds.length) {
+      await occurrences.updateMany(
+        { _id: { $in: retainedOccurrenceIds }, userId: request.user.id },
+        { $set: { historyDeletedAt: new Date() } },
+        { session },
+      );
+    }
+    if (deletedOccurrenceIds.length) {
+      await occurrences.deleteMany(
+        { _id: { $in: deletedOccurrenceIds }, userId: request.user.id },
+        { session },
+      );
+    }
   });
   await invalidateUserReadCache(request.user.id);
   return response.status(204).end();
@@ -349,7 +377,7 @@ router.get('/history', async (request, response) => {
     async () => {
       const database = getDatabase();
       const occurrences = await database.collection('occurrences')
-        .find({ userId: request.user.id, status: { $in: ['completed', 'missed'] } })
+        .find(historyClearFilter(request.user.id))
         .sort({ dueAt: -1, _id: -1 })
         .skip(parsedOffset)
         .limit(parsedLimit)
@@ -376,18 +404,26 @@ router.delete('/history/:id', async (request, response) => {
     const occurrences = database.collection('occurrences');
     const occurrence = await occurrences.findOne(
       {
+        ...historyClearFilter(request.user.id),
         _id: request.params.id,
-        userId: request.user.id,
-        status: { $in: ['completed', 'missed'] },
       },
       { session },
     );
     if (!occurrence) throw new HttpError(404, 'History entry not found');
     await deleteOccurrenceNotifications(database, request.user.id, [occurrence._id], session);
-    await occurrences.deleteOne(
-      { _id: occurrence._id, userId: request.user.id },
-      { session },
-    );
+    const { retainedOccurrenceIds } = historyDeletionPlan([occurrence]);
+    if (retainedOccurrenceIds.length) {
+      await occurrences.updateOne(
+        { _id: occurrence._id, userId: request.user.id },
+        { $set: { historyDeletedAt: new Date() } },
+        { session },
+      );
+    } else {
+      await occurrences.deleteOne(
+        { _id: occurrence._id, userId: request.user.id },
+        { session },
+      );
+    }
   });
   await invalidateUserReadCache(request.user.id);
   return response.status(204).end();
