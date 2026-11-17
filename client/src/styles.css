@@ -890,6 +890,10 @@ h3,
   font-size: 0.73rem;
 }
 
+.history-main p + p {
+  margin-top: 3px;
+}
+
 .history-status {
   color: var(--accent-teal);
   font-size: 0.72rem;
