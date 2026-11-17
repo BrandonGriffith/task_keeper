@@ -71,7 +71,7 @@ Additional scheduling behavior:
 
 ### Occurrences, missed work, and history
 
-A task is the recurring schedule; an occurrence is one scheduled instance. Occurrence documents keep snapshots of the task title, timezone, and due instant, plus lifecycle state, snooze state, and reminder timestamps. History uses the timezone saved with each occurrence so editing a task's timezone does not change how earlier dates are displayed.
+A task is the recurring schedule; an occurrence is one scheduled instance. Occurrence documents keep snapshots of the task title, timezone, and due instant, plus lifecycle state, snooze state and event times, and reminder timestamps. History uses the timezone saved with each occurrence so editing a task's timezone does not change how earlier dates are displayed.
 
 - New occurrences start as `pending`.
 - When a due time passes without completion or an active snooze, the scheduler marks the occurrence `missed`, records `missedAt`, and creates a reminder. A pending occurrence already snoozed is skipped until the snooze expires.
@@ -79,6 +79,7 @@ A task is the recurring schedule; an occurrence is one scheduled instance. Occur
 - A missed occurrence remains in history and its notifications remain available, but it stops blocking the active task and repeat reminders when its own local due day ends. The scheduler recalculates the boundary from the task's current schedule and timezone, correcting missing or stale persisted expiries before superseding; this also protects restart recovery from outdated timestamps.
 - Pending or missed occurrences can be completed on or after their due day in the occurrence's timezone, but not early. Completing an occurrence advances the task to its next open occurrence.
 - Each snooze click adds 30 minutes to the later of the existing snooze deadline or the current time. The task card shows the updated deadline, and the scheduler creates a follow-up reminder when it arrives.
+- History shows each recorded snooze time and the completion time for completed occurrences. Snooze times are recorded from the change that introduced this field onward; older occurrences have no snooze event times to display.
 - Editing a task supersedes any already-due open occurrence and clears its snooze, while retaining the missed occurrence in history. Future occurrences for the old schedule are removed and replaced with the edited schedule.
 - The history view lists completed and missed occurrences newest first and supports offset pagination. Deleting an active missed entry hides it from history without changing the occurrence that keeps its task actionable.
 - Archived tasks remain in the database, so their history remains accessible.
@@ -194,7 +195,7 @@ The server uses the official MongoDB Node.js driver directly. Documents use UUID
 | --- | --- |
 | `users` | Email, password hash, user ID, creation time, and embedded notification preferences |
 | `tasks` | User-owned recurrence definitions, timezone, next due instant, and archive state |
-| `occurrences` | Scheduled task instances, task-title snapshot, status, due time, completion/missed/superseded and missed-expiry timestamps, snooze state, and last-reminder time |
+| `occurrences` | Scheduled task instances, task-title snapshot, status, due time, completion/missed/superseded and missed-expiry timestamps, snooze state and snooze event times, and last-reminder time |
 | `notifications` | In-app notifications and read state; optionally linked to an occurrence |
 | `pushSubscriptions` | Browser subscriptions keyed by endpoint and owner |
 | `notificationDeliveries` | Retryable per-channel email/push outbox records |
