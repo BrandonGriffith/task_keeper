@@ -4,7 +4,49 @@ import {
   historyClearFilter,
   historyDeletionPlan,
   occurrenceCanBeActedOn,
+  toApiOccurrence,
 } from '../src/tasks.js';
+
+test('history occurrence responses include completion and recorded snooze times', () => {
+  const completedAt = new Date('2026-11-17T18:30:00.000Z');
+  const snoozeHistory = [
+    new Date('2026-11-17T17:00:00.000Z'),
+    new Date('2026-11-17T17:30:00.000Z'),
+  ];
+
+  assert.deepEqual(toApiOccurrence({
+    _id: 'occurrence-1',
+    taskId: 'task-1',
+    taskTitle: 'Stretch',
+    dueAt: new Date('2026-11-17T16:00:00.000Z'),
+    status: 'completed',
+    dateAdjusted: false,
+    completedAt,
+    snoozeHistory,
+  }, 'America/New_York'), {
+    id: 'occurrence-1',
+    task_id: 'task-1',
+    title: 'Stretch',
+    timezone: 'America/New_York',
+    due_at: new Date('2026-11-17T16:00:00.000Z'),
+    status: 'completed',
+    date_adjusted: false,
+    missed_at: null,
+    completed_at: completedAt,
+    snooze_history: snoozeHistory,
+  });
+});
+
+test('history occurrence responses support records created before snooze tracking', () => {
+  assert.deepEqual(toApiOccurrence({
+    _id: 'occurrence-1',
+    taskId: 'task-1',
+    taskTitle: 'Stretch',
+    dueAt: new Date('2026-11-17T16:00:00.000Z'),
+    status: 'missed',
+    dateAdjusted: false,
+  }, 'America/New_York').snooze_history, []);
+});
 
 test('history reads and clears exclude entries already deleted from history', () => {
   assert.deepEqual(historyClearFilter('user-1'), {
