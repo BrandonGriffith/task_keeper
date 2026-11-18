@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  buildReminderNotification,
   loadOccurrencesForExpiry,
   missedOccurrenceReminderEligible,
 } from '../src/scheduler.js';
@@ -10,6 +11,29 @@ const task = {
   timezone: 'America/New_York',
   dueTime: '11:59',
 };
+
+test('reminders created while in-app notifications are disabled are already read', () => {
+  const now = new Date('2026-11-12T05:00:00.000Z');
+  const occurrence = { _id: 'occurrence-1', userId: 'user-1' };
+  const notification = buildReminderNotification(
+    occurrence,
+    { title: 'Water plants' },
+    { now, inAppEnabled: false },
+  );
+
+  assert.equal(notification.readAt, now);
+  assert.equal(notification.createdAt, now);
+});
+
+test('reminders remain unread when in-app notifications are enabled', () => {
+  const notification = buildReminderNotification(
+    { _id: 'occurrence-1', userId: 'user-1' },
+    { title: 'Water plants' },
+    { now: new Date('2026-11-12T05:00:00.000Z') },
+  );
+
+  assert.equal(notification.readAt, null);
+});
 
 test('missed occurrences cannot receive reminders after their local due day expires', () => {
   const dueAt = new Date('2026-11-11T16:59:00.000Z');
