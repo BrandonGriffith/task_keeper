@@ -220,7 +220,6 @@ function TaskForm({ task, onClose, onSave }) {
     setForm((current) => ({
       ...current,
       frequency: nextFrequency,
-      monthlyDay: Math.min(current.monthlyDay, monthLength),
       yearlyDay: Math.min(current.yearlyDay, allowedYearDays),
     }));
   }
