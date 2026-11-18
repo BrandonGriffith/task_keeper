@@ -132,9 +132,13 @@ The root package uses npm workspaces to coordinate the client and server:
 │   │   └── validation.js
 │   ├── test/
 │   │   ├── deliveryRetry.test.js
+│   │   ├── notifications.test.js
 │   │   ├── pushDelivery.test.js
 │   │   ├── recurrence.test.js
-│   │   └── shutdown.test.js
+│   │   ├── requestSecurity.test.js
+│   │   ├── scheduler.test.js
+│   │   ├── shutdown.test.js
+│   │   └── tasks.test.js
 │   └── package.json
 ├── .gitignore
 ├── AGENTS.md
