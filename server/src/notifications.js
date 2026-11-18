@@ -182,11 +182,22 @@ router.put('/settings/notifications', async (request, response) => {
     systemEnabled: input.systemEnabled,
     emailEnabled: input.emailEnabled,
   };
-  const result = await getDatabase().collection('users').updateOne(
-    { _id: request.user.id },
-    { $set: { notificationPreferences: preferences } },
-  );
-  if (!result.matchedCount) throw new HttpError(404, 'User not found');
+  const database = getDatabase();
+  await withMongoTransaction(async (session) => {
+    const result = await database.collection('users').updateOne(
+      { _id: request.user.id },
+      { $set: { notificationPreferences: preferences } },
+      { session },
+    );
+    if (!result.matchedCount) throw new HttpError(404, 'User not found');
+    if (!preferences.inAppEnabled) {
+      await database.collection('notifications').updateMany(
+        { userId: request.user.id, readAt: null },
+        { $set: { readAt: new Date() } },
+        { session },
+      );
+    }
+  });
   await invalidateUserReadCache(request.user.id);
   return response.json({ preferences: toApiPreferences(preferences) });
 });
