@@ -133,13 +133,16 @@ export function historyDeletionPlan(occurrences) {
   };
 }
 
+function missedOccurrenceIsActionable(occurrence, timezone, now) {
+  return missedOccurrenceExpiresAt({ timezone }, occurrence.dueAt) > now;
+}
+
 export function occurrenceCanBeActedOn(occurrence, timezone, now = new Date()) {
   if (!occurrenceDayHasArrived(occurrence.dueAt, timezone, now)) return false;
-  if (occurrence.status === 'missed') {
-    const expiresAt = occurrence.missedExpiresAt
-      ?? missedOccurrenceExpiresAt({ timezone }, occurrence.dueAt);
-    if (expiresAt <= now) return false;
-  }
+  if (
+    occurrence.status === 'missed'
+    && !missedOccurrenceIsActionable(occurrence, timezone, now)
+  ) return false;
   return true;
 }
 
@@ -503,9 +506,9 @@ router.post('/occurrences/:id/complete', async (request, response) => {
       throw new HttpError(409, 'Task occurrence cannot be completed before its due day');
     }
     if (occurrence.status === 'missed') {
-      const expiresAt = occurrence.missedExpiresAt
-        ?? missedOccurrenceExpiresAt({ timezone }, occurrence.dueAt);
-      if (expiresAt <= now) throw new HttpError(409, 'This missed task is no longer actionable');
+      if (!missedOccurrenceIsActionable(occurrence, timezone, now)) {
+        throw new HttpError(409, 'This missed task is no longer actionable');
+      }
       if (occurrence.missedExpiresAt) {
         filter.missedExpiresAt = occurrence.missedExpiresAt;
       } else {
