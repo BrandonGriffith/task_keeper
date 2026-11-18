@@ -90,6 +90,28 @@ test('missed occurrences are actionable only until expiry', () => {
   );
 });
 
+test('stale missed expiry timestamps do not override the scheduled local-day boundary', () => {
+  const dueAt = new Date('2026-11-12T16:59:00.000Z');
+  const timezone = 'America/New_York';
+
+  assert.equal(
+    occurrenceCanBeActedOn({
+      status: 'missed',
+      dueAt,
+      missedExpiresAt: new Date('2026-11-13T00:00:00.000Z'),
+    }, timezone, new Date('2026-11-13T03:44:00.000Z')),
+    true,
+  );
+  assert.equal(
+    occurrenceCanBeActedOn({
+      status: 'missed',
+      dueAt,
+      missedExpiresAt: new Date('2026-11-13T08:00:00.000Z'),
+    }, timezone, new Date('2026-11-13T05:00:00.000Z')),
+    false,
+  );
+});
+
 test('future occurrences cannot be acted on', () => {
   assert.equal(
     occurrenceCanBeActedOn(
