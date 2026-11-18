@@ -251,12 +251,12 @@ function notificationPreferences(user) {
   };
 }
 
-async function insertReminder(occurrence, task, user, session, { repeated = false } = {}) {
-  const database = getDatabase();
-  const now = new Date();
-  const expiresAt = missedOccurrenceExpiresAt(taskSchedule(task), occurrence.dueAt);
-  if (expiresAt <= now) return false;
-  const notification = {
+export function buildReminderNotification(
+  occurrence,
+  task,
+  { now = new Date(), repeated = false, inAppEnabled = true } = {},
+) {
+  return {
     _id: randomUUID(),
     userId: occurrence.userId,
     sourceOccurrenceId: occurrence._id,
@@ -265,9 +265,22 @@ async function insertReminder(occurrence, task, user, session, { repeated = fals
     body: repeated
       ? `“${task.title}” is still missed. Complete it or snooze it for 30 minutes.`
       : `“${task.title}” is due. Mark it complete or snooze it for 30 minutes.`,
-    readAt: null,
+    readAt: inAppEnabled ? null : now,
     createdAt: now,
   };
+}
+
+async function insertReminder(occurrence, task, user, session, { repeated = false } = {}) {
+  const database = getDatabase();
+  const now = new Date();
+  const expiresAt = missedOccurrenceExpiresAt(taskSchedule(task), occurrence.dueAt);
+  if (expiresAt <= now) return false;
+  const preferences = notificationPreferences(user);
+  const notification = buildReminderNotification(occurrence, task, {
+    now,
+    repeated,
+    inAppEnabled: preferences.inAppEnabled ?? true,
+  });
   const updated = await database.collection('occurrences').findOneAndUpdate(
     {
       _id: occurrence._id,
@@ -285,7 +298,6 @@ async function insertReminder(occurrence, task, user, session, { repeated = fals
     notification,
     session ? { session } : {},
   );
-  const preferences = notificationPreferences(user);
   const channels = [];
   if (preferences.systemEnabled) channels.push('system');
   if (preferences.emailEnabled) channels.push('email');
