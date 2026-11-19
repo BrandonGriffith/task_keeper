@@ -16,7 +16,6 @@ A personal recurring-task manager (daily, weekly, monthly, yearly) with missed-t
 | Production build | `npm run build` |
 | Run automated tests | `npm test` |
 | Run production server (after build, with `NODE_ENV=production`) | `npm start` |
-| Start local Redis | `docker compose -f compose.redis.yml up -d` |
 
 On Windows PowerShell, use `npm.cmd` if `npm.ps1` is blocked. PowerShell has no `&&`; chain with `;`.
 
