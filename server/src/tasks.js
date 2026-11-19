@@ -134,6 +134,24 @@ export function historyDeletionPlan(occurrences) {
   };
 }
 
+export function buildHistoryRestoreUpdate() {
+  return { $unset: { historyDeletedAt: '' } };
+}
+
+export function buildSupersedeOccurrenceUpdate(now) {
+  return {
+    $set: { snoozedUntil: null, supersededAt: now },
+    ...buildHistoryRestoreUpdate(),
+  };
+}
+
+export function buildCompletionUpdate(now) {
+  return {
+    $set: { status: 'completed', completedAt: now, snoozedUntil: null },
+    ...buildHistoryRestoreUpdate(),
+  };
+}
+
 export function buildSnoozeUpdate(now) {
   return [
     {
@@ -192,7 +210,7 @@ async function saveTask(userId, taskId, input) {
           status: { $in: ['pending', 'missed'] },
           supersededAt: { $exists: false },
         },
-        { $set: { snoozedUntil: null, supersededAt: now } },
+        buildSupersedeOccurrenceUpdate(now),
         { session },
       );
       const removed = await occurrences.find(
@@ -382,13 +400,27 @@ router.delete('/history/:id', async (request, response) => {
 });
 
 router.delete('/:id', async (request, response) => {
-  const task = await ownedTask(request.user.id, request.params.id);
-  if (!task.archived) {
-    await getDatabase().collection('tasks').updateOne(
-      { _id: task._id, userId: request.user.id },
-      { $set: { archived: true, updatedAt: new Date() } },
+  const database = getDatabase();
+  await withMongoTransaction(async (session) => {
+    const task = await ownedTask(request.user.id, request.params.id, session);
+    if (!task.archived) {
+      await database.collection('tasks').updateOne(
+        { _id: task._id, userId: request.user.id },
+        { $set: { archived: true, updatedAt: new Date() } },
+        { session },
+      );
+    }
+    await database.collection('occurrences').updateMany(
+      {
+        taskId: task._id,
+        userId: request.user.id,
+        status: 'missed',
+        supersededAt: { $exists: false },
+      },
+      buildHistoryRestoreUpdate(),
+      { session },
     );
-  }
+  });
   await invalidateUserReadCache(request.user.id);
   return response.status(204).end();
 });
@@ -417,13 +449,27 @@ router.delete('/:id/permanent', async (request, response) => {
 });
 
 router.post('/:id/restore', async (request, response) => {
-  const task = await ownedTask(request.user.id, request.params.id);
-  if (task.archived) {
-    await getDatabase().collection('tasks').updateOne(
-      { _id: task._id, userId: request.user.id },
-      { $set: { archived: false, updatedAt: new Date() } },
+  const database = getDatabase();
+  await withMongoTransaction(async (session) => {
+    const task = await ownedTask(request.user.id, request.params.id, session);
+    if (task.archived) {
+      await database.collection('tasks').updateOne(
+        { _id: task._id, userId: request.user.id },
+        { $set: { archived: false, updatedAt: new Date() } },
+        { session },
+      );
+    }
+    await database.collection('occurrences').updateMany(
+      {
+        taskId: task._id,
+        userId: request.user.id,
+        status: 'missed',
+        supersededAt: { $exists: false },
+      },
+      buildHistoryRestoreUpdate(),
+      { session },
     );
-  }
+  });
   await invalidateUserReadCache(request.user.id);
   return response.status(204).end();
 });
@@ -465,7 +511,7 @@ router.post('/occurrences/:id/complete', async (request, response) => {
 
     const completed = await occurrences.findOneAndUpdate(
       filter,
-      { $set: { status: 'completed', completedAt: now, snoozedUntil: null } },
+      buildCompletionUpdate(now),
       { returnDocument: 'after', session },
     );
     if (!completed) throw new HttpError(404, 'Open task occurrence not found');
