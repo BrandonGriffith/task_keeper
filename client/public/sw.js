@@ -7,6 +7,7 @@ self.addEventListener('push', (event) => {
       data: { url: payload.url || '/' },
       icon: '/icon.svg',
       badge: '/icon.svg',
+      ...(payload.tag ? { tag: payload.tag } : {}),
     }),
   );
 });

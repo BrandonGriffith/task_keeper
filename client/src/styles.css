@@ -760,6 +760,13 @@ h3,
   min-height: 36px;
 }
 
+.push-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
 .preference-row span {
   display: grid;
   gap: 3px;
@@ -1383,6 +1390,11 @@ h3,
   .clear-all-button {
     align-self: flex-start;
     margin: 0;
+  }
+
+  .push-actions {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 

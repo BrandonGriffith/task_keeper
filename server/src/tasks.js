@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Router } from 'express';
 import { getDatabase, withMongoTransaction } from './db.js';
 import { HttpError } from './errors.js';
+import { insertOccurrence, insertScheduleAdjustment } from './occurrences.js';
 import {
   firstOccurrence,
   missedOccurrenceExpiresAt,
@@ -146,82 +147,6 @@ export function occurrenceCanBeActedOn(occurrence, timezone, now = new Date()) {
   return true;
 }
 
-async function insertOccurrence(task, dueAt, dateAdjusted, session) {
-  const occurrences = getDatabase().collection('occurrences');
-  const document = {
-    _id: randomUUID(),
-    taskId: task._id,
-    userId: task.userId,
-    taskTitle: task.title,
-    timezone: task.timezone,
-    dueAt,
-    status: 'pending',
-    dateAdjusted,
-    missedAt: null,
-    completedAt: null,
-    initialNotifiedAt: null,
-    lastReminderAt: null,
-    snoozedUntil: null,
-    snoozeHistory: [],
-    createdAt: new Date(),
-  };
-  try {
-    const result = await occurrences.updateOne(
-      {
-        taskId: task._id,
-        dueAt,
-        status: { $in: ['pending', 'missed'] },
-      },
-      { $setOnInsert: document },
-      { upsert: true, ...(session ? { session } : {}) },
-    );
-    const occurrence = await occurrences.findOne(
-      {
-        taskId: task._id,
-        dueAt,
-        status: { $in: ['pending', 'missed'] },
-      },
-      session ? { session } : {},
-    );
-    return { occurrence, created: result.upsertedCount === 1 };
-  } catch (error) {
-    if (session) throw error;
-    if (error.code !== 11000) throw error;
-    return {
-      occurrence: await occurrences.findOne({
-        taskId: task._id,
-        dueAt,
-        status: { $in: ['pending', 'missed'] },
-      }),
-      created: false,
-    };
-  }
-}
-
-async function addScheduleAdjustment(task, occurrence, created, session) {
-  if (!created || !occurrence.dateAdjusted) return;
-  const dateLabel = new Intl.DateTimeFormat('en', {
-    timeZone: task.timezone,
-    dateStyle: 'long',
-  }).format(occurrence.dueAt);
-  await getDatabase().collection('notifications').updateOne(
-    { occurrenceId: occurrence._id, kind: 'schedule_adjustment' },
-    {
-      $setOnInsert: {
-        _id: randomUUID(),
-        userId: task.userId,
-        occurrenceId: occurrence._id,
-        kind: 'schedule_adjustment',
-        title: 'Monthly task date adjusted',
-        body: `“${task.title}” is scheduled for ${dateLabel} because the selected day does not exist in that month.`,
-        readAt: null,
-        createdAt: new Date(),
-      },
-    },
-    { upsert: true, ...(session ? { session } : {}) },
-  );
-}
-
 async function saveTask(userId, taskId, input) {
   const schedule = { ...input };
   const first = firstOccurrence(schedule);
@@ -276,7 +201,7 @@ async function saveTask(userId, taskId, input) {
       first.dateAdjusted,
       session,
     );
-    await addScheduleAdjustment(task, occurrence, created, session);
+    await insertScheduleAdjustment(task, occurrence, created, session);
     return task;
   });
 }

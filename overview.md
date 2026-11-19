@@ -88,11 +88,11 @@ A task is the recurring schedule; an occurrence is one scheduled instance. Occur
 
 The application supports three notification channels:
 
-1. **In-app and foreground browser alerts:** Durable notification documents are stored in MongoDB and displayed in the Notifications view. While signed in, the browser checks for new notifications every 15 seconds and refreshes the task list when one arrives. The browser tab title shows the current unread notification count. After the user grants browser notification permission, due-task reminders appear as native browser alerts while task_keeper is open. If alerts have not been enabled, a toast appears while the app tab is visible. Foreground alerts use the service worker and require In-app reminders to be enabled; they do not require VAPID configuration.
+1. **In-app and foreground browser alerts:** Durable notification documents are stored in MongoDB and displayed in the Notifications view. While signed in, the browser checks for new notifications every 15 seconds and refreshes the task list when one arrives. The browser tab title shows the current unread notification count. After the user grants browser notification permission, due-task reminders appear as native browser alerts while task_keeper is open. If alerts have not been enabled, a toast appears while the app tab is visible. Foreground alerts use the service worker and require In-app reminders to be enabled; they do not require VAPID configuration. Foreground and background alerts use the same notification tag so overlapping delivery replaces the existing alert instead of showing a duplicate.
 2. **Email:** Optional delivery through SMTP using Nodemailer.
-3. **Background browser push:** Optional Web Push delivery using VAPID, the browser Push API, and a service worker. This can deliver while the app tab is closed.
+3. **Background browser push:** Optional Web Push delivery using VAPID, the browser Push API, and a service worker. The Reminders panel manages the account preference and current browser subscription. This can deliver while the app tab is closed.
 
-Email and background push are optional server-side integrations; their settings are not exposed in the current UI yet. Missing configuration leaves delivery waiting until it is available; other delivery failures retry with backoff. In-app reminders remain available either way. Foreground browser alerts require notification permission, a service worker, and In-app reminders enabled. Background browser push requires HTTPS (localhost is allowed), browser notification permission, a service worker, a registered subscription, and configured VAPID keys. Push endpoints are validated against supported secure browser notification services, and an endpoint already registered to an account cannot be claimed by another account.
+Email remains an optional server-side integration without UI controls. Background push is available in the Reminders panel when VAPID keys are configured: users can toggle the account preference and register or remove the current browser. Missing server configuration leaves delivery waiting until it is available; other delivery failures retry with backoff. In-app reminders remain available either way. Foreground browser alerts require notification permission, a service worker, and In-app reminders enabled. Background browser push requires HTTPS (localhost is allowed), browser notification permission, a service worker, a registered subscription, and configured VAPID keys. Push endpoints are validated against supported secure browser notification services, and an endpoint already registered to an account cannot be claimed by another account.
 
 External notification deliveries use separate MongoDB documents with `pending`, `waiting_for_configuration`, `sending`, `sent`, or `failed` state, retry time, attempt count, and last error. Missing email or push configuration leaves a delivery waiting without consuming an attempt; it becomes eligible again when that channel is configured. Other delivery failures use exponential backoff and stop after five failed attempts; stale `sending` records are reclaimed after five minutes. Push deliveries record each successfully served subscription so a later retry skips it. A process crash between provider acceptance and recording success can still result in a duplicate. Expired subscriptions that return HTTP 404 or 410 are removed.
 
@@ -106,6 +106,8 @@ The root package uses npm workspaces to coordinate the client and server:
 │   ├── public/
 │   │   ├── icon.svg
 │   │   └── sw.js
+│   ├── test/
+│   │   └── push.test.js
 │   ├── src/
 │   │   ├── api.js
 │   │   ├── App.jsx
@@ -153,9 +155,10 @@ The root package uses npm workspaces to coordinate the client and server:
 
 ### Client
 
-- `client/src/App.jsx` implements account forms, task creation/editing, active/archived lists, task actions, history, notifications, and in-app/foreground browser reminder settings. Email and background push remain server-side integrations without UI controls.
+- `client/src/App.jsx` implements account forms, task creation/editing, active/archived lists, task actions, history, notifications, and reminder settings, including foreground browser alerts and background push subscription management. Email remains a server-side integration without UI controls.
 - `client/src/api.js` is the same-origin JSON API helper; it includes session cookies and normalizes network and server errors for the UI.
 - `client/src/main.jsx` mounts React.
+- `client/src/push.js` converts the server's base64url VAPID key for the browser Push API; `client/test/` covers the conversion.
 - `client/src/styles.css` contains the responsive application styling and light/dark color palettes.
 - Dark mode is the default when no browser theme preference is saved. The theme toggle appears at the bottom of the sign-in/sign-up screen and each signed-in page; the selection is saved in browser local storage (`theme`) and applied as `data-theme` on `<html>`.
   - The control is an accessible checkbox with `role="switch"` and the label "Dark mode", inside `<footer class="theme-footer">`.
@@ -183,7 +186,7 @@ The root package uses npm workspaces to coordinate the client and server:
 - `server/src/scheduler.js` fills the occurrence schedule, creates initial, snooze-expiry, and 10-minute repeat reminders for open missed occurrences, revalidates missed-expiry timestamps, and processes email/push delivery documents.
 - `server/src/deliveryRetry.js` calculates notification delivery retry states and delays; `server/src/pushDelivery.js` tracks successful push subscriptions across retries.
 - `server/src/shutdown.js` runs ordered shutdown cleanup steps without skipping later resources after a failure.
-- `server/test/` contains the Node.js built-in regression test suite (`npm test`).
+- `server/test/` contains the server regression suite; `client/test/` contains client utility tests. Both use the Node.js built-in test runner through `npm test`.
 - `server/src/notifications.js` implements notification queries, read state, preferences, and push subscriptions.
 - `server/src/validation.js` validates task input and calendar constraints.
 - `server/src/config.js` loads `.env` and validates required/optional runtime configuration.

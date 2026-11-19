@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api.js';
+import { applicationServerKeyFromBase64Url } from './push.js';
 
 const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const authRetryDelaysMs = [250, 500, 1000, 2000, 4000];
@@ -464,13 +465,20 @@ function NotificationSettings({
   settings,
   browserPermission,
   browserAlertsReady,
+  backgroundPushReady,
   onChange,
   onEnableBrowser,
+  onEnablePush,
+  onDisablePush,
   notice,
   busy,
 }) {
   if (!settings) return null;
   const { preferences } = settings;
+  const supportsBackgroundPush = 'Notification' in window
+    && 'serviceWorker' in navigator
+    && 'PushManager' in window
+    && window.isSecureContext;
   let browserAlertStatus = 'Permission is needed to show task reminders';
   if (!('Notification' in window) || !('serviceWorker' in navigator)) {
     browserAlertStatus = 'Not supported by this browser';
@@ -482,6 +490,20 @@ function NotificationSettings({
       : 'Permission granted; browser alerts still need setup';
   } else if (browserPermission === 'denied') {
     browserAlertStatus = 'Blocked in browser site settings';
+  }
+  let backgroundPushStatus = browserPermission === 'granted'
+    ? 'No push subscription is set up in this browser'
+    : 'Permission is needed to set up background push';
+  if (!settings.availability.system) {
+    backgroundPushStatus = 'Background push is not configured on the server';
+  } else if (!supportsBackgroundPush) {
+    backgroundPushStatus = 'Requires a supported browser and HTTPS or localhost';
+  } else if (browserPermission === 'denied') {
+    backgroundPushStatus = 'Blocked in browser site settings';
+  } else if (backgroundPushReady) {
+    backgroundPushStatus = preferences.system_enabled
+      ? 'A push subscription is present in this browser'
+      : 'This browser has a subscription, but background push is disabled for the account';
   }
   return (
     <section className="settings-card">
@@ -521,6 +543,64 @@ function NotificationSettings({
           onChange={(event) => onChange({ ...preferences, inAppEnabled: event.target.checked })}
         />
       </label>
+      {settings.availability.system && (
+        <label className="preference-row">
+          <span>
+            <strong>Background push</strong>
+            <small>Allow push reminders on subscribed browsers, even when the app is closed</small>
+          </span>
+          <input
+            type="checkbox"
+            checked={preferences.system_enabled}
+            disabled={busy}
+            onChange={(event) => onChange({
+              ...preferences,
+              systemEnabled: event.target.checked,
+            })}
+          />
+        </label>
+      )}
+      {(settings.availability.system || backgroundPushReady) ? (
+        <div className="preference-row browser-alert-row">
+          <span>
+            <strong>This browser</strong>
+            <small>{backgroundPushStatus}.</small>
+          </span>
+          <div className="push-actions">
+            {settings.availability.system && (
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={onEnablePush}
+                disabled={
+                  busy
+                  || !supportsBackgroundPush
+                  || browserPermission === 'denied'
+                }
+              >
+                {backgroundPushReady ? 'Set up / sync this browser' : 'Set up this browser'}
+              </button>
+            )}
+            {backgroundPushReady && (
+              <button
+                type="button"
+                className="quiet-button"
+                onClick={onDisablePush}
+                disabled={busy}
+              >
+                Remove this browser
+              </button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="preference-row browser-alert-row">
+          <span>
+            <strong>Background push</strong>
+            <small>Unavailable until the server is configured with VAPID keys.</small>
+          </span>
+        </div>
+      )}
       {notice && <p className="settings-notice" role="status">{notice}</p>}
     </section>
   );
@@ -554,6 +634,7 @@ export default function App() {
     'Notification' in window ? Notification.permission : 'unsupported'
   ));
   const [browserAlertsReady, setBrowserAlertsReady] = useState(false);
+  const [backgroundPushReady, setBackgroundPushReady] = useState(false);
   const notificationIds = useRef(new Set());
   const toastTimer = useRef(null);
 
@@ -652,6 +733,7 @@ export default function App() {
                     body: notification.body,
                     icon: '/icon.svg',
                     badge: '/icon.svg',
+                    tag: notification.id,
                     data: { url: '/' },
                   },
                 )));
@@ -698,6 +780,29 @@ export default function App() {
       window.removeEventListener('focus', updatePermission);
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const updatePushSubscription = async () => {
+      if (!user || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+        setBackgroundPushReady(false);
+        return;
+      }
+      try {
+        const registration = await navigator.serviceWorker.getRegistration();
+        const subscription = await registration?.pushManager.getSubscription();
+        if (active) setBackgroundPushReady(Boolean(subscription));
+      } catch (error) {
+        if (active) console.error('Could not check browser push setup.', error);
+      }
+    };
+    void updatePushSubscription();
+    window.addEventListener('focus', updatePushSubscription);
+    return () => {
+      active = false;
+      window.removeEventListener('focus', updatePushSubscription);
+    };
+  }, [user]);
 
   const unreadCount = useMemo(
     () => notifications.filter((notification) => !notification.read_at).length,
@@ -848,15 +953,7 @@ export default function App() {
     setSettingsBusy(true);
     setSettingsNotice('');
     try {
-      await api('/settings/notifications', {
-        method: 'PUT',
-        body: JSON.stringify({
-          inAppEnabled: next.inAppEnabled ?? next.in_app_enabled,
-          systemEnabled: next.systemEnabled ?? next.system_enabled,
-          emailEnabled: next.emailEnabled ?? next.email_enabled,
-        }),
-      });
-      const updated = await api('/settings/notifications');
+      const updated = await saveNotificationPreferences(next);
       setSettings(updated);
       return true;
     } catch (error) {
@@ -865,6 +962,18 @@ export default function App() {
     } finally {
       setSettingsBusy(false);
     }
+  }
+
+  async function saveNotificationPreferences(next) {
+    await api('/settings/notifications', {
+      method: 'PUT',
+      body: JSON.stringify({
+        inAppEnabled: next.inAppEnabled ?? next.in_app_enabled,
+        systemEnabled: next.systemEnabled ?? next.system_enabled,
+        emailEnabled: next.emailEnabled ?? next.email_enabled,
+      }),
+    });
+    return api('/settings/notifications');
   }
 
   async function enableBrowserNotifications() {
@@ -886,6 +995,82 @@ export default function App() {
       await navigator.serviceWorker.ready;
       setBrowserAlertsReady(true);
       setSettingsNotice('Browser notifications are enabled while task_keeper is open.');
+    } catch (error) {
+      setSettingsNotice(error.message);
+    } finally {
+      setSettingsBusy(false);
+    }
+  }
+
+  async function enableBackgroundPush() {
+    setSettingsBusy(true);
+    setSettingsNotice('');
+    try {
+      if (!settings?.availability.system || !settings.publicKey) {
+        throw new Error('Background push is not configured on the server.');
+      }
+      if (
+        !('Notification' in window)
+        || !('serviceWorker' in navigator)
+        || !('PushManager' in window)
+      ) {
+        throw new Error('This browser does not support background push.');
+      }
+      if (!window.isSecureContext) {
+        throw new Error('Background push requires HTTPS or localhost.');
+      }
+      const permission = await Notification.requestPermission();
+      setBrowserPermission(permission);
+      if (permission !== 'granted') {
+        throw new Error('Allow notifications in your browser to enable background push.');
+      }
+
+      const registration = await navigator.serviceWorker.register('/sw.js');
+      await navigator.serviceWorker.ready;
+      setBrowserAlertsReady(true);
+      let subscription = await registration.pushManager.getSubscription();
+      if (!subscription) {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: applicationServerKeyFromBase64Url(settings.publicKey),
+        });
+      }
+      await api('/push-subscriptions', {
+        method: 'POST',
+        body: JSON.stringify(subscription.toJSON()),
+      });
+      setBackgroundPushReady(true);
+
+      const updatedSettings = settings.preferences.system_enabled
+        ? settings
+        : await saveNotificationPreferences({
+          ...settings.preferences,
+          systemEnabled: true,
+        });
+      setSettings(updatedSettings);
+      setSettingsNotice('Background push is set up for this browser.');
+    } catch (error) {
+      setSettingsNotice(error.message);
+    } finally {
+      setSettingsBusy(false);
+    }
+  }
+
+  async function disableBackgroundPush() {
+    setSettingsBusy(true);
+    setSettingsNotice('');
+    try {
+      const registration = await navigator.serviceWorker.getRegistration();
+      const subscription = await registration?.pushManager.getSubscription();
+      if (subscription) {
+        await api('/push-subscriptions', {
+          method: 'DELETE',
+          body: JSON.stringify({ endpoint: subscription.endpoint }),
+        });
+        await subscription.unsubscribe();
+      }
+      setBackgroundPushReady(false);
+      setSettingsNotice('Background push was removed from this browser.');
     } catch (error) {
       setSettingsNotice(error.message);
     } finally {
@@ -1064,8 +1249,11 @@ export default function App() {
               settings={settings}
               browserPermission={browserPermission}
               browserAlertsReady={browserAlertsReady}
+              backgroundPushReady={backgroundPushReady}
               onChange={updatePreferences}
               onEnableBrowser={enableBrowserNotifications}
+              onEnablePush={enableBackgroundPush}
+              onDisablePush={disableBackgroundPush}
               notice={settingsNotice}
               busy={settingsBusy}
             />

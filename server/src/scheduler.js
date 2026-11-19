@@ -5,6 +5,7 @@ import { emailConfigured, pushConfigured } from './config.js';
 import { buildDeliveryFailureUpdate, maxDeliveryAttempts } from './deliveryRetry.js';
 import { getDatabase, withMongoTransaction } from './db.js';
 import { sendPendingPushSubscriptions } from './pushDelivery.js';
+import { insertOccurrence, insertScheduleAdjustment } from './occurrences.js';
 import {
   missedOccurrenceExpiresAt,
   nextOccurrence,
@@ -59,87 +60,6 @@ export async function loadOccurrencesForExpiry(occurrences, now) {
     ],
   }).sort({ missedExpiresAt: 1, dueAt: 1 }).limit(remaining).toArray();
   return [...expired, ...needingRecheck];
-}
-
-function scheduleAdjustmentBody(task, dueAt) {
-  const dateLabel = new Intl.DateTimeFormat('en', {
-    timeZone: task.timezone,
-    dateStyle: 'long',
-  }).format(dueAt);
-  return `“${task.title}” is scheduled for ${dateLabel} because the selected day does not exist in that month.`;
-}
-
-async function insertOccurrence(task, dueAt, dateAdjusted, session) {
-  const occurrences = getDatabase().collection('occurrences');
-  const document = {
-    _id: randomUUID(),
-    taskId: task._id,
-    userId: task.userId,
-    taskTitle: task.title,
-    timezone: task.timezone,
-    dueAt,
-    status: 'pending',
-    dateAdjusted,
-    missedAt: null,
-    completedAt: null,
-    initialNotifiedAt: null,
-    lastReminderAt: null,
-    snoozedUntil: null,
-    createdAt: new Date(),
-  };
-  try {
-    const result = await occurrences.updateOne(
-      {
-        taskId: task._id,
-        dueAt,
-        status: { $in: ['pending', 'missed'] },
-      },
-      { $setOnInsert: document },
-      { upsert: true, ...(session ? { session } : {}) },
-    );
-    return {
-      occurrence: await occurrences.findOne(
-        {
-          taskId: task._id,
-          dueAt,
-          status: { $in: ['pending', 'missed'] },
-        },
-        session ? { session } : {},
-      ),
-      created: result.upsertedCount === 1,
-    };
-  } catch (error) {
-    if (session) throw error;
-    if (error.code !== 11000) throw error;
-    return {
-      occurrence: await occurrences.findOne({
-        taskId: task._id,
-        dueAt,
-        status: { $in: ['pending', 'missed'] },
-      }),
-      created: false,
-    };
-  }
-}
-
-async function insertScheduleAdjustment(task, occurrence, created, session) {
-  if (!created || !occurrence.dateAdjusted) return;
-  await getDatabase().collection('notifications').updateOne(
-    { occurrenceId: occurrence._id, kind: 'schedule_adjustment' },
-    {
-      $setOnInsert: {
-        _id: randomUUID(),
-        userId: task.userId,
-        occurrenceId: occurrence._id,
-        kind: 'schedule_adjustment',
-        title: 'Monthly task date adjusted',
-        body: scheduleAdjustmentBody(task, occurrence.dueAt),
-        readAt: null,
-        createdAt: new Date(),
-      },
-    },
-    { upsert: true, ...(session ? { session } : {}) },
-  );
 }
 
 async function createUpcomingOccurrences(changedUserIds) {
@@ -563,7 +483,12 @@ async function sendDelivery(delivery) {
     process.env.VAPID_PUBLIC_KEY,
     process.env.VAPID_PRIVATE_KEY,
   );
-  const payload = JSON.stringify({ title: delivery.title, body: delivery.body, url: '/' });
+  const payload = JSON.stringify({
+    title: delivery.title,
+    body: delivery.body,
+    url: '/',
+    tag: delivery.notificationId,
+  });
   await sendPendingPushSubscriptions({
     subscriptions,
     deliveredSubscriptionIds,

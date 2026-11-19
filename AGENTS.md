@@ -63,7 +63,7 @@ Before starting the local app with `npm run dev` (or `npm.cmd run dev` in PowerS
 
 ## Verification notes
 
-- Run `npm test` for the server regression suite and `npm run build` for client build validation; use the browser-control skill for safe, user-visible workflow checks.
+- Run `npm test` for the server and client regression suites and `npm run build` for client build validation; use the browser-control skill for safe, user-visible workflow checks.
 - Editing server files restarts the API (`node --watch`); wait for "API listening" before checking API behavior.
 - Preserve key flows: register/login, create tasks of all four frequencies, edit after snooze or missed (no stale "snoozed until" or "missed occurrence"), keep missed tasks actionable until completion or the end of their scheduled local due day, repeated 30-minute snoozes, complete, clear history and notifications, and delete individual history/notifications/archived tasks.
 
