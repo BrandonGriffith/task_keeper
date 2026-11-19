@@ -637,6 +637,14 @@ export default function App() {
   const [backgroundPushReady, setBackgroundPushReady] = useState(false);
   const notificationIds = useRef(new Set());
   const toastTimer = useRef(null);
+  const activeUserId = useRef(null);
+  const refreshGeneration = useRef(0);
+
+  function activateUser(nextUser) {
+    activeUserId.current = nextUser?.id ?? null;
+    refreshGeneration.current += 1;
+    setUser(nextUser);
+  }
 
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = darkMode ? 'dark' : 'light';
@@ -644,12 +652,21 @@ export default function App() {
   }, [darkMode]);
 
   const refreshData = useCallback(async () => {
+    const requestUserId = activeUserId.current;
+    if (!requestUserId) return;
+    const requestGeneration = ++refreshGeneration.current;
     const [taskData, historyData, notificationData, settingsData] = await Promise.all([
       api('/tasks'),
       api('/tasks/history?limit=100&offset=0'),
       api('/notifications'),
       api('/settings/notifications'),
     ]);
+    if (
+      !requestUserId
+      || activeUserId.current !== requestUserId
+      || refreshGeneration.current !== requestGeneration
+    ) return;
+
     setTasks(taskData.tasks);
     setHistory(historyData.occurrences);
     setHistoryNextOffset(historyData.nextOffset);
@@ -669,7 +686,7 @@ export default function App() {
           const result = await api('/auth/me');
           if (active) {
             setPageError('');
-            setUser(result.user);
+            activateUser(result.user);
           }
           break;
         } catch (error) {
@@ -701,7 +718,10 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return;
-    refreshData().catch((error) => setPageError(error.message));
+    const requestUserId = user.id;
+    refreshData().catch((error) => {
+      if (activeUserId.current === requestUserId) setPageError(error.message);
+    });
   }, [user, refreshData]);
 
   useEffect(() => {
@@ -1117,7 +1137,7 @@ export default function App() {
   async function signOut() {
     try {
       await api('/auth/logout', { method: 'POST', body: '{}' });
-      setUser(null);
+      activateUser(null);
       setTasks([]);
       setArchivedTasks([]);
       setHistory([]);
@@ -1141,7 +1161,7 @@ export default function App() {
       <AuthScreen
         onSignedIn={(account) => {
           setPageError('');
-          setUser(account);
+          activateUser(account);
         }}
         darkMode={darkMode}
         onThemeChange={setDarkMode}
