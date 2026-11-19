@@ -398,47 +398,69 @@ async function expireMissedOccurrences(changedUserIds) {
   const staleOccurrences = await loadOccurrencesForExpiry(occurrences, now);
 
   for (const occurrence of staleOccurrences) {
-    const task = await database.collection('tasks').findOne({
-      _id: occurrence.taskId,
-      userId: occurrence.userId,
-    });
-    const expectedExpiry = task
-      ? missedOccurrenceExpiresAt(taskSchedule(task), occurrence.dueAt)
-      : now;
-    const storedExpiryFilter = occurrence.missedExpiresAt
-      ? { missedExpiresAt: occurrence.missedExpiresAt }
-      : { missedExpiresAt: null };
-    const filter = {
-      _id: occurrence._id,
-      status: occurrence.status,
-      supersededAt: { $exists: false },
-      ...storedExpiryFilter,
-    };
+    await withMongoTransaction(async (session) => {
+      const task = await database.collection('tasks').findOne({
+        _id: occurrence.taskId,
+        userId: occurrence.userId,
+      }, { session });
+      const expectedExpiry = task
+        ? missedOccurrenceExpiresAt(taskSchedule(task), occurrence.dueAt)
+        : now;
+      const storedExpiryFilter = occurrence.missedExpiresAt
+        ? { missedExpiresAt: occurrence.missedExpiresAt }
+        : { missedExpiresAt: null };
+      const filter = {
+        _id: occurrence._id,
+        status: occurrence.status,
+        supersededAt: { $exists: false },
+        ...storedExpiryFilter,
+      };
 
-    if (expectedExpiry > now) {
-      if (occurrence.missedExpiresAt?.getTime() !== expectedExpiry.getTime()) {
-        await occurrences.updateOne(filter, { $set: { missedExpiresAt: expectedExpiry } });
+      if (expectedExpiry > now) {
+        if (occurrence.missedExpiresAt?.getTime() !== expectedExpiry.getTime()) {
+          await occurrences.updateOne(
+            filter,
+            { $set: { missedExpiresAt: expectedExpiry } },
+            { session },
+          );
+        }
+        return;
       }
-      continue;
-    }
 
-    const expired = await occurrences.updateOne(filter, {
-      $set: {
-        status: 'missed',
-        missedAt: occurrence.missedAt ?? expectedExpiry,
-        missedExpiresAt: expectedExpiry,
-        supersededAt: now,
-        snoozedUntil: null,
-      },
-    });
-    if (expired.modifiedCount) {
+      const expired = await occurrences.updateOne(filter, {
+        $set: {
+          status: 'missed',
+          missedAt: occurrence.status === 'missed'
+            ? (occurrence.missedAt ?? now)
+            : now,
+          missedExpiresAt: expectedExpiry,
+          supersededAt: now,
+          snoozedUntil: null,
+        },
+      }, { session });
+      if (!expired.modifiedCount) return;
+
       if (task && !task.archived) {
         const next = nextOccurrence(taskSchedule(task), occurrence.dueAt);
-        const inserted = await insertOccurrence(task, next.dueAt, next.dateAdjusted);
-        await insertScheduleAdjustment(task, inserted.occurrence, inserted.created);
+        const inserted = await insertOccurrence(
+          task,
+          next.dueAt,
+          next.dateAdjusted,
+          session,
+        );
+        await insertScheduleAdjustment(task, inserted.occurrence, inserted.created, session);
+        const afterNext = nextOccurrence(taskSchedule(task), next.dueAt);
+        await database.collection('tasks').updateOne(
+          { _id: task._id, userId: task.userId, archived: false },
+          {
+            $max: { nextDueAt: afterNext.dueAt },
+            $set: { updatedAt: now },
+          },
+          { session },
+        );
       }
       changedUserIds.add(occurrence.userId);
-    }
+    });
   }
 }
 

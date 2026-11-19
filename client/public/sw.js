@@ -1,6 +1,13 @@
 self.addEventListener('push', (event) => {
   if (!event.data) return;
-  const payload = event.data.json();
+  let payload;
+  try {
+    payload = event.data.json();
+  } catch (error) {
+    console.error('Invalid push notification payload', error);
+    return;
+  }
+  if (!payload || typeof payload.title !== 'string') return;
   event.waitUntil(
     self.registration.showNotification(payload.title, {
       body: payload.body,

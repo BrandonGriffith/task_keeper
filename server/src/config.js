@@ -16,13 +16,15 @@ export function assertRuntimeConfig() {
 
 export function emailConfigured() {
   const port = Number(process.env.EMAIL_SMTP_PORT);
+  const username = process.env.EMAIL_SMTP_USER;
+  const password = process.env.EMAIL_SMTP_PASSWORD;
   return Boolean(
     process.env.EMAIL_SMTP_HOST
     && Number.isInteger(port)
     && port > 0
     && port <= 65535
     && process.env.EMAIL_FROM
-    && (!process.env.EMAIL_SMTP_USER || process.env.EMAIL_SMTP_PASSWORD),
+    && ((!username && !password) || (username && password)),
   );
 }
 
