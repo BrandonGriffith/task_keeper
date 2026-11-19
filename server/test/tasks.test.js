@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  buildCompletionUpdate,
+  buildHistoryRestoreUpdate,
   buildSnoozeUpdate,
+  buildSupersedeOccurrenceUpdate,
   historyClearFilter,
   historyDeletionPlan,
   occurrenceCanBeActedOn,
@@ -79,6 +82,31 @@ test('snoozing a history-deleted occurrence restores its history and records the
       { $ifNull: ['$snoozeHistory', []] },
       [snoozedAt],
     ],
+  });
+});
+
+test('completing a history-deleted occurrence restores its history', () => {
+  const completedAt = new Date('2026-11-17T17:00:00.000Z');
+
+  assert.deepEqual(buildCompletionUpdate(completedAt), {
+    $set: {
+      status: 'completed',
+      completedAt,
+      snoozedUntil: null,
+    },
+    $unset: { historyDeletedAt: '' },
+  });
+});
+
+test('history restore and supersede updates clear the deletion marker', () => {
+  const supersededAt = new Date('2026-11-17T17:00:00.000Z');
+
+  assert.deepEqual(buildSupersedeOccurrenceUpdate(supersededAt), {
+    $set: { snoozedUntil: null, supersededAt },
+    $unset: { historyDeletedAt: '' },
+  });
+  assert.deepEqual(buildHistoryRestoreUpdate(), {
+    $unset: { historyDeletedAt: '' },
   });
 });
 
