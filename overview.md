@@ -82,6 +82,7 @@ A task is the recurring schedule; an occurrence is one scheduled instance. Occur
 - History shows each recorded snooze time and the completion time for completed occurrences. Snooze times are recorded from the change that introduced this field onward; older occurrences have no snooze event times to display.
 - Editing a task supersedes any already-due open occurrence and clears its snooze, while retaining the missed occurrence in history. Future occurrences for the old schedule are removed and replaced with the edited schedule.
 - The history view lists completed and missed occurrences newest first and supports offset pagination. Deleting an active missed entry hides it from history without changing the occurrence that keeps its task actionable.
+- Completing, snoozing, editing, archiving, or restoring a task makes its affected active occurrence visible in history again if that entry was previously hidden by a history deletion. History remains an occurrence record, not a log of every task-field change.
 - Archived tasks remain in the database, so their history remains accessible.
 
 ### Notifications
@@ -125,6 +126,7 @@ The root package uses npm workspaces to coordinate the client and server:
 │   │   ├── errors.js
 │   │   ├── index.js
 │   │   ├── notifications.js
+│   │   ├── occurrences.js
 │   │   ├── pushDelivery.js
 │   │   ├── recurrence.js
 │   │   ├── redis.js
@@ -133,14 +135,18 @@ The root package uses npm workspaces to coordinate the client and server:
 │   │   ├── tasks.js
 │   │   └── validation.js
 │   ├── test/
+│   │   ├── auth.test.js
+│   │   ├── config.test.js
 │   │   ├── deliveryRetry.test.js
+│   │   ├── errors.test.js
 │   │   ├── notifications.test.js
 │   │   ├── pushDelivery.test.js
 │   │   ├── recurrence.test.js
 │   │   ├── requestSecurity.test.js
 │   │   ├── scheduler.test.js
 │   │   ├── shutdown.test.js
-│   │   └── tasks.test.js
+│   │   ├── tasks.test.js
+│   │   └── validation.test.js
 │   └── package.json
 ├── .gitignore
 ├── AGENTS.md
@@ -194,7 +200,7 @@ The root package uses npm workspaces to coordinate the client and server:
 
 ## MongoDB data model
 
-The server uses the official MongoDB Node.js driver directly. Documents use UUID strings as `_id` values and camelCase fields internally. API response mapping preserves the existing frontend's snake_case field names where expected. Task creation/editing/completion and reminder creation use MongoDB transactions to keep related task, occurrence, and notification records consistent. The application creates indexes at startup; there is no SQL migration to run.
+The server uses the official MongoDB Node.js driver directly. Documents use UUID strings as `_id` values and camelCase fields internally. API response mapping preserves the existing frontend's snake_case field names where expected. Multi-document task, history, and reminder changes use MongoDB transactions to keep related records consistent. The application creates indexes at startup; there is no SQL migration to run.
 
 ### Collections
 
@@ -250,8 +256,8 @@ All endpoints use the `/api` prefix and return JSON except where noted. In devel
 | `DELETE` | `/api/tasks/:id/permanent` | Permanently deletes an archived task and its related records |
 | `POST` | `/api/tasks/:id/restore` | Restores an archived task |
 | `GET` | `/api/tasks/history?limit=100&offset=0` | Lists occurrence history; limit is 1–200 |
-| `DELETE` | `/api/tasks/history` | Clears all history occurrences and their linked notifications and delivery records |
-| `DELETE` | `/api/tasks/history/:id` | Deletes a history occurrence and its linked notifications |
+| `DELETE` | `/api/tasks/history` | Clears visible history: deletes completed and superseded missed occurrences, hides still-actionable missed occurrences, and removes linked notifications and delivery records |
+| `DELETE` | `/api/tasks/history/:id` | Deletes a history occurrence or hides an active missed occurrence, and removes linked notifications |
 | `POST` | `/api/tasks/occurrences/:id/complete` | Completes an open occurrence |
 | `POST` | `/api/tasks/occurrences/:id/snooze` | Snoozes an open occurrence for 30 minutes |
 
@@ -405,11 +411,11 @@ Run from the repository root:
 | --- | --- |
 | `npm run dev` | Starts the API in Node watch mode and the Vite development server |
 | `npm run build` | Builds the React client into the repository-root `build/` folder |
-| `npm test` | Runs the server regression tests with Node.js's built-in test runner |
+| `npm test` | Runs the server and client regression tests with Node.js's built-in test runner |
 | `npm run docs:pdf` | Regenerates the architecture and dependencies PDF from the current project manifests |
 | `npm start` | Starts the API, MongoDB client, and reminder scheduler |
 
-Run `npm test` for the server regression suite and `npm run build` for client build validation. Use the browser-control skill for safe, user-visible workflow checks. Verify API behavior with the running app when the change affects server routes or scheduling.
+Run `npm test` for the server and client regression suites and `npm run build` for client build validation. Use the browser-control skill for safe, user-visible workflow checks. Verify API behavior with the running app when the change affects server routes or scheduling.
 
 On Windows, if PowerShell blocks the `npm.ps1` shim, run commands as `npm.cmd run dev`, `npm.cmd run build`, and similar.
 
