@@ -134,6 +134,28 @@ export function historyDeletionPlan(occurrences) {
   };
 }
 
+export function buildSnoozeUpdate(now) {
+  return [
+    {
+      $set: {
+        snoozedUntil: {
+          $add: [
+            { $max: [{ $ifNull: ['$snoozedUntil', '$$NOW'] }, '$$NOW'] },
+            30 * 60_000,
+          ],
+        },
+        snoozeHistory: {
+          $concatArrays: [
+            { $ifNull: ['$snoozeHistory', []] },
+            [now],
+          ],
+        },
+        historyDeletedAt: '$$REMOVE',
+      },
+    },
+  ];
+}
+
 function missedOccurrenceIsActionable(occurrence, timezone, now) {
   return missedOccurrenceExpiresAt({ timezone }, occurrence.dueAt) > now;
 }
@@ -510,24 +532,7 @@ router.post('/occurrences/:id/snooze', async (request, response) => {
     }
     return occurrences.findOneAndUpdate(
       filter,
-      [
-        {
-          $set: {
-            snoozedUntil: {
-              $add: [
-                { $max: [{ $ifNull: ['$snoozedUntil', '$$NOW'] }, '$$NOW'] },
-                30 * 60_000,
-              ],
-            },
-            snoozeHistory: {
-              $concatArrays: [
-                { $ifNull: ['$snoozeHistory', []] },
-                [now],
-              ],
-            },
-          },
-        },
-      ],
+      buildSnoozeUpdate(now),
       { returnDocument: 'after', session },
     );
   });

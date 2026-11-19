@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  buildSnoozeUpdate,
   historyClearFilter,
   historyDeletionPlan,
   occurrenceCanBeActedOn,
@@ -65,6 +66,19 @@ test('deleting history hides active missed occurrences without deleting them', (
   ]), {
     retainedOccurrenceIds: ['active-missed'],
     deletedOccurrenceIds: ['past-missed', 'closed-missed', 'completed'],
+  });
+});
+
+test('snoozing a history-deleted occurrence restores its history and records the snooze', () => {
+  const snoozedAt = new Date('2026-11-17T17:00:00.000Z');
+  const update = buildSnoozeUpdate(snoozedAt);
+
+  assert.equal(update[0].$set.historyDeletedAt, '$$REMOVE');
+  assert.deepEqual(update[0].$set.snoozeHistory, {
+    $concatArrays: [
+      { $ifNull: ['$snoozeHistory', []] },
+      [snoozedAt],
+    ],
   });
 });
 
