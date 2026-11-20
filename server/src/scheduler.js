@@ -541,6 +541,54 @@ async function sendDelivery(delivery) {
   });
 }
 
+async function recordDeliveryFailure(claimed, collection, error, missingConfiguration) {
+  const message = error instanceof Error ? error.message : 'Notification delivery failed';
+  if (!missingConfiguration) {
+    console.error(`Notification delivery ${claimed._id} failed: ${message}`);
+  }
+  await collection.updateOne(
+    { _id: claimed._id, status: 'sending' },
+    buildDeliveryFailureUpdate({
+      attempts: claimed.attempts,
+      errorMessage: message,
+      missingConfiguration,
+    }),
+  );
+}
+
+export async function processClaimedDelivery(
+  claimed,
+  { database, collection, send = sendDelivery },
+) {
+  let notification;
+  try {
+    notification = await database.collection('notifications')
+      .findOne({ _id: claimed.notificationId });
+  } catch (error) {
+    await recordDeliveryFailure(claimed, collection, error, false);
+    return;
+  }
+
+  if (!notification) {
+    console.error(`Notification delivery ${claimed._id} has no linked notification; removing it`);
+    await collection.deleteOne({ _id: claimed._id, status: 'sending' });
+    return;
+  }
+
+  try {
+    await send({ ...claimed, title: notification.title, body: notification.body });
+    await collection.updateOne(
+      { _id: claimed._id, status: 'sending' },
+      { $set: { status: 'sent', lastError: null, updatedAt: new Date() } },
+    );
+  } catch (error) {
+    const missingConfiguration = claimed.channel === 'email'
+      ? !emailConfigured()
+      : !pushConfigured();
+    await recordDeliveryFailure(claimed, collection, error, missingConfiguration);
+  }
+}
+
 async function processDeliveryOutbox() {
   const database = getDatabase();
   const collection = database.collection('notificationDeliveries');
@@ -584,33 +632,7 @@ async function processDeliveryOutbox() {
     );
     if (!claimed) continue;
 
-    const notification = await database.collection('notifications')
-      .findOne({ _id: claimed.notificationId });
-    if (!notification) throw new Error(`Notification ${claimed.notificationId} not found`);
-    const sendData = { ...claimed, title: notification.title, body: notification.body };
-    try {
-      await sendDelivery(sendData);
-      await collection.updateOne(
-        { _id: claimed._id, status: 'sending' },
-        { $set: { status: 'sent', lastError: null, updatedAt: new Date() } },
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Notification delivery failed';
-      const missingConfiguration = claimed.channel === 'email'
-        ? !emailConfigured()
-        : !pushConfigured();
-      if (!missingConfiguration) {
-        console.error(`Notification delivery ${claimed._id} failed: ${message}`);
-      }
-      await collection.updateOne(
-        { _id: claimed._id, status: 'sending' },
-        buildDeliveryFailureUpdate({
-          attempts: claimed.attempts,
-          errorMessage: message,
-          missingConfiguration,
-        }),
-      );
-    }
+    await processClaimedDelivery(claimed, { database, collection });
   }
 }
 

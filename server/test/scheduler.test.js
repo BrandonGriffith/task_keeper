@@ -4,6 +4,7 @@ import {
   buildReminderNotification,
   loadOccurrencesForExpiry,
   missedOccurrenceReminderEligible,
+  processClaimedDelivery,
 } from '../src/scheduler.js';
 
 const task = {
@@ -121,4 +122,62 @@ test('expiry batches prioritize rows already past their stored expiry', async ()
     { missedExpiresAt: { $gt: now } },
   ]);
   assert.equal(queries[1].limit, 99);
+});
+
+test('a claimed delivery is removed when its notification no longer exists', async () => {
+  const deletes = [];
+  const originalConsoleError = console.error;
+  console.error = () => {};
+  try {
+    await processClaimedDelivery({
+      _id: 'delivery-1',
+      notificationId: 'notification-1',
+      status: 'sending',
+      attempts: 1,
+      channel: 'email',
+    }, {
+      database: { collection: () => ({ findOne: async () => null }) },
+      collection: {
+        deleteOne: async (...args) => deletes.push(args),
+        updateOne: async () => assert.fail('orphaned delivery must not be retried'),
+      },
+    });
+  } finally {
+    console.error = originalConsoleError;
+  }
+
+  assert.deepEqual(deletes, [[{ _id: 'delivery-1', status: 'sending' }]]);
+});
+
+test('notification lookup failures schedule a delivery retry', async () => {
+  const updates = [];
+  const originalConsoleError = console.error;
+  console.error = () => {};
+  try {
+    await processClaimedDelivery({
+      _id: 'delivery-1',
+      notificationId: 'notification-1',
+      status: 'sending',
+      attempts: 1,
+      channel: 'email',
+    }, {
+      database: {
+        collection: () => ({
+          findOne: async () => {
+            throw new Error('Temporary database failure');
+          },
+        }),
+      },
+      collection: {
+        updateOne: async (...args) => updates.push(args),
+      },
+    });
+  } finally {
+    console.error = originalConsoleError;
+  }
+
+  assert.equal(updates.length, 1);
+  assert.deepEqual(updates[0][0], { _id: 'delivery-1', status: 'sending' });
+  assert.equal(updates[0][1].$set.status, 'failed');
+  assert.equal(updates[0][1].$set.lastError, 'Temporary database failure');
 });
