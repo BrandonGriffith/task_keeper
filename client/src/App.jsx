@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api.js';
 import { applicationServerKeyFromBase64Url } from './push.js';
+import { readThemePreference, saveThemePreference } from './theme.js';
 
 const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const authRetryDelaysMs = [250, 500, 1000, 2000, 4000];
@@ -381,7 +382,7 @@ function TaskForm({ task, onClose, onSave }) {
             </div>
           )}
           <p className="timezone-note">
-            Times follow your device timezone: <strong>{form.timezone}</strong>
+            Times follow this task's timezone: <strong>{form.timezone}</strong>
           </p>
           {error && <p className="error-message" role="alert">{error}</p>}
           <div className="form-actions">
@@ -611,7 +612,7 @@ export default function App() {
   const [authChecked, setAuthChecked] = useState(false);
   const [authRetryKey, setAuthRetryKey] = useState(0);
   const [darkMode, setDarkMode] = useState(() => {
-    const savedTheme = window.localStorage.getItem('theme');
+    const savedTheme = readThemePreference();
     return savedTheme === null || savedTheme === 'dark';
   });
   const [tab, setTab] = useState('tasks');
@@ -648,7 +649,7 @@ export default function App() {
 
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = darkMode ? 'dark' : 'light';
-    window.localStorage.setItem('theme', darkMode ? 'dark' : 'light');
+    saveThemePreference(darkMode ? 'dark' : 'light');
   }, [darkMode]);
 
   const refreshData = useCallback(async () => {
