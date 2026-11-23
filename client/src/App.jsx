@@ -330,17 +330,11 @@ function TaskForm({ task, onClose, onSave }) {
                 value={form.monthlyDay}
                 onChange={(event) => setForm({ ...form, monthlyDay: Number(event.target.value) })}
               >
-                {task?.monthly_day > monthLength && (
-                  <option value={task.monthly_day} disabled>
-                    {task.monthly_day} (saved schedule; short months use month-end)
-                  </option>
-                )}
-                {Array.from({ length: monthLength }, (_, index) => index + 1)
+                {Array.from({ length: 31 }, (_, index) => index + 1)
                   .map((day) => <option key={day} value={day}>{day}</option>)}
               </select>
               <small>
-                Only dates available this month are offered. In a shorter future month, the task
-                moves to its last day and a notice is added.
+                In a shorter month, the task moves to its last day and a notice is added.
               </small>
             </label>
           )}
