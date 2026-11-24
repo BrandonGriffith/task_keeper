@@ -614,6 +614,7 @@ export default function App() {
   const [archivedTasks, setArchivedTasks] = useState([]);
   const [history, setHistory] = useState([]);
   const [historyNextOffset, setHistoryNextOffset] = useState(null);
+  const [loadingOlderHistory, setLoadingOlderHistory] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [settings, setSettings] = useState(null);
   const [modalTask, setModalTask] = useState(undefined);
@@ -634,6 +635,7 @@ export default function App() {
   const toastTimer = useRef(null);
   const activeUserId = useRef(null);
   const refreshGeneration = useRef(0);
+  const historyLoadInFlight = useRef(false);
 
   function activateUser(nextUser) {
     activeUserId.current = nextUser?.id ?? null;
@@ -1106,13 +1108,18 @@ export default function App() {
   }
 
   async function loadOlderHistory() {
-    if (historyNextOffset === null) return;
+    if (historyNextOffset === null || historyLoadInFlight.current) return;
+    historyLoadInFlight.current = true;
+    setLoadingOlderHistory(true);
     try {
       const page = await api(`/tasks/history?limit=100&offset=${historyNextOffset}`);
       setHistory((items) => [...items, ...page.occurrences]);
       setHistoryNextOffset(page.nextOffset);
     } catch (error) {
       setPageError(error.message);
+    } finally {
+      historyLoadInFlight.current = false;
+      setLoadingOlderHistory(false);
     }
   }
 
@@ -1329,8 +1336,12 @@ export default function App() {
                   ))}
                 </div>
                 {historyNextOffset !== null && (
-                  <button className="secondary-button load-more" onClick={loadOlderHistory}>
-                    Load older history
+                  <button
+                    className="secondary-button load-more"
+                    onClick={loadOlderHistory}
+                    disabled={loadingOlderHistory}
+                  >
+                    {loadingOlderHistory ? 'Loading older history…' : 'Load older history'}
                   </button>
                 )}
               </>
