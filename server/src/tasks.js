@@ -119,6 +119,16 @@ export function historyClearFilter(userId) {
   };
 }
 
+export function historyCursorFilter(userId, dueAt, occurrenceId) {
+  return {
+    ...historyClearFilter(userId),
+    $or: [
+      { dueAt: { $lt: dueAt } },
+      { dueAt, _id: { $lt: occurrenceId } },
+    ],
+  };
+}
+
 export function historyDeletionPlan(occurrences) {
   const retainedOccurrenceIds = occurrences
     .filter((occurrence) => (
@@ -132,6 +142,44 @@ export function historyDeletionPlan(occurrences) {
       .filter((occurrence) => !retainedIds.has(occurrence._id))
       .map((occurrence) => occurrence._id),
   };
+}
+
+export async function cancelTaskNotificationDeliveries(database, userId, taskId, session) {
+  const sessionOption = session ? { session } : {};
+  const occurrences = await database.collection('occurrences').find(
+    {
+      taskId,
+      userId,
+      status: { $in: ['pending', 'missed'] },
+      supersededAt: { $exists: false },
+    },
+    { projection: { _id: 1 }, ...sessionOption },
+  ).toArray();
+  const occurrenceIds = occurrences.map((occurrence) => occurrence._id);
+  if (!occurrenceIds.length) return;
+
+  const notifications = await database.collection('notifications').find(
+    {
+      userId,
+      $or: [
+        { occurrenceId: { $in: occurrenceIds } },
+        { sourceOccurrenceId: { $in: occurrenceIds } },
+      ],
+    },
+    { projection: { _id: 1 }, ...sessionOption },
+  ).toArray();
+  const notificationIds = notifications.map((notification) => notification._id);
+  if (!notificationIds.length) return;
+
+  await database.collection('notificationDeliveries').updateMany(
+    {
+      userId,
+      notificationId: { $in: notificationIds },
+      status: { $in: ['pending', 'failed', 'waiting_for_configuration', 'sending'] },
+    },
+    { $set: { status: 'cancelled', updatedAt: new Date() } },
+    sessionOption,
+  );
 }
 
 export function buildHistoryRestoreUpdate() {
@@ -334,24 +382,41 @@ router.delete('/history', async (request, response) => {
 router.get('/history', async (request, response) => {
   const parsedLimit = Number(request.query.limit ?? 100);
   const parsedOffset = Number(request.query.offset ?? 0);
+  const beforeDueAt = request.query.before_due_at;
+  const beforeId = request.query.before_id;
+  const hasCursor = beforeDueAt !== undefined || beforeId !== undefined;
   if (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 200) {
     throw new HttpError(400, 'History page size must be between 1 and 200');
   }
   if (!Number.isInteger(parsedOffset) || parsedOffset < 0) {
     throw new HttpError(400, 'History offset must be a non-negative integer');
   }
+  if (hasCursor && (
+    typeof beforeDueAt !== 'string'
+    || Number.isNaN(new Date(beforeDueAt).getTime())
+    || typeof beforeId !== 'string'
+    || !beforeId
+    || beforeId.length > 128
+  )) {
+    throw new HttpError(400, 'History cursor is invalid');
+  }
+  const cursorDueAt = hasCursor ? new Date(beforeDueAt) : null;
+  const responseKey = hasCursor
+    ? `history:${parsedLimit}:before:${cursorDueAt.toISOString()}:${beforeId}`
+    : `history:${parsedLimit}:offset:${parsedOffset}`;
 
   const result = await getCachedJsonResponse(
     request.user.id,
-    `history:${parsedLimit}:${parsedOffset}`,
+    responseKey,
     async () => {
       const database = getDatabase();
-      const occurrences = await database.collection('occurrences')
-        .find(historyClearFilter(request.user.id))
-        .sort({ dueAt: -1, _id: -1 })
-        .skip(parsedOffset)
-        .limit(parsedLimit)
-        .toArray();
+      let query = database.collection('occurrences')
+        .find(hasCursor
+          ? historyCursorFilter(request.user.id, cursorDueAt, beforeId)
+          : historyClearFilter(request.user.id))
+        .sort({ dueAt: -1, _id: -1 });
+      if (!hasCursor) query = query.skip(parsedOffset);
+      const occurrences = await query.limit(parsedLimit).toArray();
       const taskIds = [...new Set(occurrences.map((occurrence) => occurrence.taskId))];
       const tasks = await database.collection('tasks')
         .find({ _id: { $in: taskIds }, userId: request.user.id }, { projection: { _id: 1, timezone: 1 } })
@@ -362,6 +427,12 @@ router.get('/history', async (request, response) => {
           toApiOccurrence(occurrence, occurrence.timezone ?? timezones.get(occurrence.taskId))
         )),
         nextOffset: occurrences.length === parsedLimit ? parsedOffset + occurrences.length : null,
+        next_cursor: occurrences.length === parsedLimit
+          ? {
+            due_at: occurrences[occurrences.length - 1].dueAt,
+            id: occurrences[occurrences.length - 1]._id,
+          }
+          : null,
       };
     },
   );
@@ -410,6 +481,12 @@ router.delete('/:id', async (request, response) => {
         { session },
       );
     }
+    await cancelTaskNotificationDeliveries(
+      database,
+      request.user.id,
+      task._id,
+      session,
+    );
     await database.collection('occurrences').updateMany(
       {
         taskId: task._id,
