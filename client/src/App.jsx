@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api.js';
-import { applicationServerKeyFromBase64Url } from './push.js';
+import {
+  applicationServerKeyFromBase64Url,
+  removeCurrentPushSubscription,
+} from './push.js';
 import { readThemePreference, saveThemePreference } from './theme.js';
 
 const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -613,7 +616,7 @@ export default function App() {
   const [tasks, setTasks] = useState([]);
   const [archivedTasks, setArchivedTasks] = useState([]);
   const [history, setHistory] = useState([]);
-  const [historyNextOffset, setHistoryNextOffset] = useState(null);
+  const [historyNextCursor, setHistoryNextCursor] = useState(null);
   const [loadingOlderHistory, setLoadingOlderHistory] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [settings, setSettings] = useState(null);
@@ -666,7 +669,7 @@ export default function App() {
 
     setTasks(taskData.tasks);
     setHistory(historyData.occurrences);
-    setHistoryNextOffset(historyData.nextOffset);
+    setHistoryNextCursor(historyData.next_cursor);
     notificationIds.current = new Set(notificationData.notifications.map((notification) => notification.id));
     setNotifications(notificationData.notifications);
     setSettings(settingsData);
@@ -915,7 +918,7 @@ export default function App() {
       await api(`/tasks/history/${item.id}`, { method: 'DELETE' });
       const page = await api('/tasks/history?limit=100&offset=0');
       setHistory(page.occurrences);
-      setHistoryNextOffset(page.nextOffset);
+      setHistoryNextCursor(page.next_cursor);
       notify('History entry deleted.');
     } catch (error) {
       setPageError(error.message);
@@ -1108,13 +1111,18 @@ export default function App() {
   }
 
   async function loadOlderHistory() {
-    if (historyNextOffset === null || historyLoadInFlight.current) return;
+    if (historyNextCursor === null || historyLoadInFlight.current) return;
     historyLoadInFlight.current = true;
     setLoadingOlderHistory(true);
     try {
-      const page = await api(`/tasks/history?limit=100&offset=${historyNextOffset}`);
+      const query = new URLSearchParams({
+        limit: '100',
+        before_due_at: historyNextCursor.due_at,
+        before_id: historyNextCursor.id,
+      });
+      const page = await api(`/tasks/history?${query}`);
       setHistory((items) => [...items, ...page.occurrences]);
-      setHistoryNextOffset(page.nextOffset);
+      setHistoryNextCursor(page.next_cursor);
     } catch (error) {
       setPageError(error.message);
     } finally {
@@ -1138,12 +1146,21 @@ export default function App() {
 
   async function signOut() {
     try {
+      if ('serviceWorker' in navigator) {
+        await removeCurrentPushSubscription(
+          navigator.serviceWorker,
+          (endpoint) => api('/push-subscriptions', {
+            method: 'DELETE',
+            body: JSON.stringify({ endpoint }),
+          }),
+        );
+      }
       await api('/auth/logout', { method: 'POST', body: '{}' });
       activateUser(null);
       setTasks([]);
       setArchivedTasks([]);
       setHistory([]);
-      setHistoryNextOffset(null);
+      setHistoryNextCursor(null);
       setNotifications([]);
       setSettings(null);
       setPageError('');
@@ -1335,7 +1352,7 @@ export default function App() {
                     </article>
                   ))}
                 </div>
-                {historyNextOffset !== null && (
+                {historyNextCursor !== null && (
                   <button
                     className="secondary-button load-more"
                     onClick={loadOlderHistory}
