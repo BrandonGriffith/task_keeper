@@ -5,7 +5,9 @@ import {
   buildHistoryRestoreUpdate,
   buildSnoozeUpdate,
   buildSupersedeOccurrenceUpdate,
+  cancelTaskNotificationDeliveries,
   historyClearFilter,
+  historyCursorFilter,
   historyDeletionPlan,
   occurrenceCanBeActedOn,
   toApiOccurrence,
@@ -50,6 +52,70 @@ test('history occurrence responses support records created before snooze trackin
     status: 'missed',
     dateAdjusted: false,
   }, 'America/New_York').snooze_history, []);
+});
+
+test('history cursor continues after the last row in the same due-time group', () => {
+  const dueAt = new Date('2026-11-17T16:00:00.000Z');
+
+  assert.deepEqual(historyCursorFilter('user-1', dueAt, 'occurrence-2'), {
+    userId: 'user-1',
+    status: { $in: ['completed', 'missed'] },
+    historyDeletedAt: { $exists: false },
+    $or: [
+      { dueAt: { $lt: dueAt } },
+      { dueAt, _id: { $lt: 'occurrence-2' } },
+    ],
+  });
+});
+
+test('archiving cancels undelivered notifications for the task open occurrences', async () => {
+  const calls = [];
+  const database = {
+    collection(name) {
+      if (name === 'occurrences') {
+        return {
+          find: (filter, options) => {
+            calls.push(['occurrences', filter, options]);
+            return { toArray: async () => [{ _id: 'occurrence-1' }] };
+          },
+        };
+      }
+      if (name === 'notifications') {
+        return {
+          find: (filter, options) => {
+            calls.push(['notifications', filter, options]);
+            return { toArray: async () => [{ _id: 'notification-1' }] };
+          },
+        };
+      }
+      return {
+        updateMany: async (...args) => calls.push(['deliveries', ...args]),
+      };
+    },
+  };
+  const session = { id: 'transaction-session' };
+
+  await cancelTaskNotificationDeliveries(database, 'user-1', 'task-1', session);
+
+  assert.deepEqual(calls[0], [
+    'occurrences',
+    {
+      taskId: 'task-1',
+      userId: 'user-1',
+      status: { $in: ['pending', 'missed'] },
+      supersededAt: { $exists: false },
+    },
+    { projection: { _id: 1 }, session },
+  ]);
+  assert.equal(calls[1][0], 'notifications');
+  assert.equal(calls[2][0], 'deliveries');
+  assert.deepEqual(calls[2][1], {
+    userId: 'user-1',
+    notificationId: { $in: ['notification-1'] },
+    status: { $in: ['pending', 'failed', 'waiting_for_configuration', 'sending'] },
+  });
+  assert.equal(calls[2][2].$set.status, 'cancelled');
+  assert.deepEqual(calls[2][3], { session });
 });
 
 test('history reads and clears exclude entries already deleted from history', () => {
