@@ -181,3 +181,26 @@ test('notification lookup failures schedule a delivery retry', async () => {
   assert.equal(updates[0][1].$set.status, 'failed');
   assert.equal(updates[0][1].$set.lastError, 'Temporary database failure');
 });
+
+test('a delivery skipped as stale is marked cancelled instead of sent', async () => {
+  const updates = [];
+  await processClaimedDelivery({
+    _id: 'delivery-1',
+    notificationId: 'notification-1',
+    status: 'sending',
+    attempts: 1,
+    channel: 'email',
+  }, {
+    database: {
+      collection: () => ({
+        findOne: async () => ({ _id: 'notification-1', title: 'Reminder', body: 'Task due' }),
+      }),
+    },
+    collection: {
+      updateOne: async (...args) => updates.push(args),
+    },
+    send: async () => false,
+  });
+
+  assert.equal(updates[0][1].$set.status, 'cancelled');
+});
