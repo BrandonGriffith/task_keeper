@@ -477,6 +477,27 @@ function emailTransport() {
 
 async function sendDelivery(delivery) {
   const database = getDatabase();
+  const occurrenceId = delivery.notification?.sourceOccurrenceId
+    ?? delivery.notification?.occurrenceId;
+  if (occurrenceId) {
+    const occurrence = await database.collection('occurrences').findOne({
+      _id: occurrenceId,
+      userId: delivery.userId,
+    });
+    const task = occurrence && await database.collection('tasks').findOne({
+      _id: occurrence.taskId,
+      userId: delivery.userId,
+    });
+    if (
+      !occurrence
+      || occurrence.status !== 'missed'
+      || occurrence.supersededAt
+      || occurrence.snoozedUntil
+      || !task
+      || task.archived
+      || !missedOccurrenceReminderEligible(occurrence, task, new Date())
+    ) return false;
+  }
   const user = await database.collection('users').findOne({ _id: delivery.userId });
   if (!user) throw new Error('Notification recipient no longer exists');
   const preferences = notificationPreferences(user);
@@ -576,10 +597,21 @@ export async function processClaimedDelivery(
   }
 
   try {
-    await send({ ...claimed, title: notification.title, body: notification.body });
+    const delivered = await send({
+      ...claimed,
+      title: notification.title,
+      body: notification.body,
+      notification,
+    });
     await collection.updateOne(
       { _id: claimed._id, status: 'sending' },
-      { $set: { status: 'sent', lastError: null, updatedAt: new Date() } },
+      {
+        $set: {
+          status: delivered === false ? 'cancelled' : 'sent',
+          lastError: null,
+          updatedAt: new Date(),
+        },
+      },
     );
   } catch (error) {
     const missingConfiguration = claimed.channel === 'email'
