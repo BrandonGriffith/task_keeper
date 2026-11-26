@@ -198,6 +198,28 @@ test('missed occurrences are actionable only until expiry', () => {
   );
 });
 
+test('pending occurrences are not actionable after their scheduled local due day', () => {
+  const dueAt = new Date('2026-11-12T16:59:00.000Z');
+  const timezone = 'America/New_York';
+
+  assert.equal(
+    occurrenceCanBeActedOn(
+      { status: 'pending', dueAt },
+      timezone,
+      new Date('2026-11-13T04:59:59.000Z'),
+    ),
+    true,
+  );
+  assert.equal(
+    occurrenceCanBeActedOn(
+      { status: 'pending', dueAt },
+      timezone,
+      new Date('2026-11-13T05:00:00.000Z'),
+    ),
+    false,
+  );
+});
+
 test('stale missed expiry timestamps do not override the scheduled local-day boundary', () => {
   const dueAt = new Date('2026-11-12T16:59:00.000Z');
   const timezone = 'America/New_York';
