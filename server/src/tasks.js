@@ -222,17 +222,13 @@ export function buildSnoozeUpdate(now) {
   ];
 }
 
-function missedOccurrenceIsActionable(occurrence, timezone, now) {
+function occurrenceHasNotExpired(occurrence, timezone, now) {
   return missedOccurrenceExpiresAt({ timezone }, occurrence.dueAt) > now;
 }
 
 export function occurrenceCanBeActedOn(occurrence, timezone, now = new Date()) {
   if (!occurrenceDayHasArrived(occurrence.dueAt, timezone, now)) return false;
-  if (
-    occurrence.status === 'missed'
-    && !missedOccurrenceIsActionable(occurrence, timezone, now)
-  ) return false;
-  return true;
+  return occurrenceHasNotExpired(occurrence, timezone, now);
 }
 
 async function saveTask(userId, taskId, input) {
@@ -575,10 +571,15 @@ router.post('/occurrences/:id/complete', async (request, response) => {
     if (!occurrenceDayHasArrived(occurrence.dueAt, timezone, now)) {
       throw new HttpError(409, 'Task occurrence cannot be completed before its due day');
     }
+    if (!occurrenceHasNotExpired(occurrence, timezone, now)) {
+      throw new HttpError(
+        409,
+        occurrence.status === 'missed'
+          ? 'This missed task is no longer actionable'
+          : 'This task occurrence is no longer actionable',
+      );
+    }
     if (occurrence.status === 'missed') {
-      if (!missedOccurrenceIsActionable(occurrence, timezone, now)) {
-        throw new HttpError(409, 'This missed task is no longer actionable');
-      }
       if (occurrence.missedExpiresAt) {
         filter.missedExpiresAt = occurrence.missedExpiresAt;
       } else {
@@ -643,7 +644,7 @@ router.post('/occurrences/:id/snooze', async (request, response) => {
         409,
         occurrence.status === 'missed'
           ? 'This missed task is no longer actionable'
-          : 'Task occurrence cannot be snoozed before its due day',
+          : 'This task occurrence is no longer actionable',
       );
     }
     if (occurrence.status === 'missed') {
