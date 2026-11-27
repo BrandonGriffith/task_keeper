@@ -1132,15 +1132,18 @@ export default function App() {
   }
 
   async function openArchivedTasks() {
+    const requestUserId = activeUserId.current;
+    if (!requestUserId) return;
     setLoadingArchived(true);
     try {
       const result = await api('/tasks?archived=true');
+      if (activeUserId.current !== requestUserId) return;
       setArchivedTasks(result.tasks.map((task) => ({ ...task, archived: true })));
       setShowArchived(true);
     } catch (error) {
-      setPageError(error.message);
+      if (activeUserId.current === requestUserId) setPageError(error.message);
     } finally {
-      setLoadingArchived(false);
+      if (activeUserId.current === requestUserId) setLoadingArchived(false);
     }
   }
 
@@ -1165,6 +1168,7 @@ export default function App() {
       setSettings(null);
       setPageError('');
       setShowArchived(false);
+      setLoadingArchived(false);
       setTab('tasks');
       notificationIds.current.clear();
     } catch (error) {
